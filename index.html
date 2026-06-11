@@ -171,6 +171,9 @@
               <label class="checkbox-label" style="align-self:center" title="Surveillants de réserve à prévoir pour chaque épreuve">
                 🛟 Réserve / épreuve <input type="number" id="opt-nb-reserves" min="0" max="20" value="2" style="width:58px;margin-left:6px">
               </label>
+              <label class="checkbox-label" style="align-self:center" title="Réserve présente jusqu’à la fin du tiers temps de chaque épreuve">
+                ⏳ Réserve TT / épreuve <input type="number" id="opt-nb-reserves-tt" min="0" max="10" value="1" style="width:58px;margin-left:6px">
+              </label>
               <button class="btn btn-accent" id="btn-lancer-repartition">⚡ Lancer la répartition</button>
               <button class="btn btn-outline" id="btn-vider-repartition">🗑 Tout effacer</button>
             </div>
@@ -474,6 +477,10 @@
             <label class="checkbox-label"><input type="checkbox" id="am-lecteur"> Secrétaire lecteur</label>
             <label class="checkbox-label"><input type="checkbox" id="am-scripteur"> Secrétaire scripteur</label>
             <label class="checkbox-label"><input type="checkbox" id="am-isolement"> Salle à effectif réduit</label>
+            <label class="checkbox-label"><input type="checkbox" id="am-qualite"> Non prise en compte de la qualité rédactionnelle dont l’orthographe</label>
+            <label class="checkbox-label"><input type="checkbox" id="am-avs"> Assistance d’un AVS ou AESH</label>
+            <label class="checkbox-label"><input type="checkbox" id="am-dictee"> Dictée aménagée</label>
+            <label class="checkbox-label"><input type="checkbox" id="am-calculatrice"> Autorisation de la calculatrice (simple, non programmable et sans mémoire)</label>
             <label class="checkbox-label"><input type="checkbox" id="am-ordi"> Ordinateur</label>
           </div>
           <div class="form-group full">

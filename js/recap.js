@@ -119,7 +119,8 @@ const Recap = {
         return;
       }
       const avecReserve = !!(AppData.getReserve(ep.id).length || AppData.params.nbReserves);
-      const span = salles.length + (avecReserve ? 1 : 0);
+      const avecReserveTT = !!(AppData.getReserveTT(ep.id).length || AppData.params.nbReservesTT);
+      const span = salles.length + (avecReserve ? 1 : 0) + (avecReserveTT ? 1 : 0);
       salles.forEach((salle, i) => {
         const fin = AppData.heureFinSalle(ep, salle);
         const chips = AppData.getAffectes(ep.id, salle.id).map(id => {
@@ -138,6 +139,21 @@ const Recap = {
           <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, salle: salle.id })}'>${chips}</td>
         </tr>`;
       });
+      if (avecReserveTT) {
+        const resTTChips = AppData.getReserveTT(ep.id).map(id => {
+          const s = AppData.getSurveillant(id);
+          if (!s) return '';
+          const verrou = AppData.estVerrouille(ep.id, 'RT', id);
+          const dnd = JSON.stringify({ ep: ep.id, reserveTT: true, surv: id });
+          return `<span class="surv-chip chip-tt ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">${verrou ? '📌 ' : ''}⏳ ${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
+        }).filter(Boolean).join(' ');
+        html += `<tr class="row-reserve-tt">
+          <td>${ep.heureDebut}–${AppData.heureFinTT(ep)}</td>
+          <td>🛟⏳ Réserve tiers temps</td>
+          <td class="text-center">—</td>
+          <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, reserveTT: true })}'>${resTTChips || '<span class="calc-attente">Personne</span>'}</td>
+        </tr>`;
+      }
       if (avecReserve) {
         const resChips = AppData.getReserve(ep.id).map(id => {
           const s = AppData.getSurveillant(id);
@@ -233,6 +249,9 @@ const Recap = {
         if (AppData.estEnReserve(ep.id, sv.id)) {
           creneaux.push({ ep, salle: null, duree: ep.duree, reserve: true });
         }
+        if (AppData.estEnReserveTT(ep.id, sv.id)) {
+          creneaux.push({ ep, salle: null, duree: AppData.dureeTiersTemps(ep.duree), reserveTT: true });
+        }
       });
       const minutes = creneaux.reduce((a, c) => a + c.duree, 0);
       return { sv, creneaux, minutes };
@@ -255,7 +274,9 @@ const Recap = {
 
     lignes.forEach(({ sv, creneaux, minutes }) => {
       const detail = creneaux.map(c =>
-        c.reserve
+        c.reserveTT
+          ? `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — <span class="badge badge-tt">🛟⏳ Réserve TT jusqu\u2019à ${AppData.heureFinTT(c.ep)}</span> (${AppData.formatDuree(c.duree)})`
+          : c.reserve
           ? `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — <span class="badge badge-tt">🛟 Réserve</span> (${AppData.formatDuree(c.duree)})`
           : `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — salle ${escHtml(c.salle.nom)}` +
             `${c.salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}${c.salle.type === 'secretariat' ? ' <span class="badge badge-secr">Secr.</span>' : ''} (${AppData.formatDuree(c.duree)})`
@@ -319,6 +340,10 @@ const Recap = {
             if (!mob.has(id)) mob.set(id, []);
             mob.get(id).push({ role: 'reserve', detail: `${ep.matiere}` });
           });
+          AppData.getReserveTT(ep.id).forEach(id => {
+            if (!mob.has(id)) mob.set(id, []);
+            mob.get(id).push({ role: 'reserveTT', detail: `${ep.matiere} (jusqu\u2019à ${AppData.heureFinTT(ep)})` });
+          });
         });
 
         const lignes = [...mob.entries()]
@@ -343,7 +368,7 @@ const Recap = {
         html += `<div class="table-wrapper"><table class="data-table">
           <thead><tr><th>Personnel</th><th>Fonction</th><th>Mobilisation(s)</th></tr></thead><tbody>`;
         lignes.forEach(({ s, roles }) => {
-          const badges = { salle: '', secr: ' <span class="badge badge-secr">Secrétariat</span>', reserve: ' <span class="badge badge-tt">Réserve</span>' };
+          const badges = { salle: '', secr: ' <span class="badge badge-secr">Secrétariat</span>', reserve: ' <span class="badge badge-tt">Réserve</span>', reserveTT: ' <span class="badge badge-tt">🛟⏳ Réserve TT</span>' };
           html += `<tr>
             <td><strong>${escHtml(s.nom)}</strong> ${escHtml(s.prenom)}</td>
             <td>${escHtml(s.fonction || '')}</td>
@@ -414,6 +439,17 @@ const Recap = {
           <span class="jury-card-meta">${ep.heureDebut}–${AppData.heureFin(ep)} ${badge}</span>
         </div>
         <div style="padding:12px 16px">
+          <div style="margin-bottom:8px"><strong>🛟⏳ Réserve tiers temps</strong> <span class="dispo-count">(présence jusqu\u2019à ${AppData.heureFinTT(ep)})</span></div>
+          <div class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, reserveTT: true })}' style="min-height:34px;margin-bottom:10px">
+            ${AppData.getReserveTT(ep.id).map(id => {
+              const s = AppData.getSurveillant(id);
+              if (!s) return '';
+              const c = AppData.chargeSurveillant(id);
+              const verrou = AppData.estVerrouille(ep.id, 'RT', id);
+              const dnd = JSON.stringify({ ep: ep.id, reserveTT: true, surv: id });
+              return `<span class="surv-chip chip-tt ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`}>${verrou ? '📌 ' : ''}⏳ ${escHtml(s.nom)} ${escHtml(s.prenom)} <span class="dispo-count">${c.creneaux} cr. · ${AppData.formatDuree(c.minutes)}</span></span>`;
+            }).filter(Boolean).join(' ') || '<span class="calc-attente">Personne.</span>'}
+          </div>
           <div style="margin-bottom:8px"><strong>🛟 Réserve affectée</strong></div>
           <div class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, reserve: true })}' style="min-height:34px">
             ${chipsReserve || '<span class="calc-attente">Personne — lancez la répartition ou glissez un surveillant ici.</span>'}

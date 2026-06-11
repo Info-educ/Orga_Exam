@@ -2782,3 +2782,19 @@ div.modal-wide { max-width: 780px; }
 }
 .surv-chip:hover .chip-lock { opacity: 1; }
 .surv-chip.locked .chip-lock { opacity: 0.8; }
+
+/* --- Réserve tiers temps : bien identifiable --- */
+.surv-chip.chip-tt {
+  background: #ede9fe;
+  border-color: #a78bfa;
+  color: #4c1d95;
+}
+.chip-tt-label {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: #6d28d9;
+}
+.row-reserve-tt td {
+  background: #f5f3ff;
+  border-top: 2px dashed #a78bfa;
+}

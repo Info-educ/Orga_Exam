@@ -152,6 +152,10 @@ const Salles = {
     $('#am-lecteur').checked = a ? a.lecteur : false;
     $('#am-scripteur').checked = a ? a.scripteur : false;
     $('#am-isolement').checked = a ? a.isolement : false;
+    $('#am-qualite').checked = a ? !!a.qualiteRedac : false;
+    $('#am-avs').checked = a ? !!a.avs : false;
+    $('#am-dictee').checked = a ? !!a.dictee : false;
+    $('#am-calculatrice').checked = a ? !!a.calculatrice : false;
     $('#am-ordi').checked = a ? a.ordinateur : false;
     $('#am-autre').value = a ? a.autre : '';
     $('#am-accompagnant').value = a ? a.accompagnant : '';
@@ -174,6 +178,10 @@ const Salles = {
       lecteur: $('#am-lecteur').checked,
       scripteur: $('#am-scripteur').checked,
       isolement: $('#am-isolement').checked,
+      qualiteRedac: $('#am-qualite').checked,
+      avs: $('#am-avs').checked,
+      dictee: $('#am-dictee').checked,
+      calculatrice: $('#am-calculatrice').checked,
       ordinateur: $('#am-ordi').checked,
       autre: $('#am-autre').value,
       salleId: $('#am-salle').value,

@@ -35,6 +35,11 @@ const Repartition = {
       Unsaved.marquer();
       this.rendre();
     });
+    $('#opt-nb-reserves-tt').addEventListener('change', () => {
+      AppData.params.nbReservesTT = Math.max(0, parseInt($('#opt-nb-reserves-tt').value, 10) || 0);
+      Unsaved.marquer();
+      this.rendre();
+    });
     DnD.init();
   },
 
@@ -62,6 +67,9 @@ const Repartition = {
       Object.keys(AppData.reserves).forEach(epId => {
         AppData.reserves[epId] = AppData.reserves[epId].filter(survId => AppData.estVerrouille(epId, null, survId));
       });
+      Object.keys(AppData.reservesTT).forEach(epId => {
+        AppData.reservesTT[epId] = AppData.reservesTT[epId].filter(survId => AppData.estVerrouille(epId, 'RT', survId));
+      });
     }
 
     // Charge simulée pendant la passe (inclut secrétariat et réserve déjà en place)
@@ -78,9 +86,16 @@ const Repartition = {
      * on minimise minutes / heuresHebdo (référence 18 h si non renseigné).
      * Ainsi un 18 h surveille 2× plus qu'un 9 h — mais tous les postes
      * sont pourvus tant qu'il reste un candidat (le ratio n'est jamais bloquant).
+     *
+     * Départage ALÉATOIRE : à ratio et créneaux égaux (typiquement au début de
+     * la passe, quand toutes les charges sont nulles), l'ordre est tiré au sort
+     * à chaque lancement — jamais alphabétique. Relancer produit une autre
+     * distribution, toujours équilibrée selon les quotités.
      */
     const poids = (s) => s.heuresHebdo > 0 ? s.heuresHebdo : 18;
     const ratio = (s) => charge[s.id].minutes / poids(s);
+    const alea = {};   // ordre aléatoire propre à cette passe
+    AppData.surveillants.forEach(s => { alea[s.id] = Math.random(); });
     const choisir = (ep) => {
       const candidats = AppData.surveillants.filter(s =>
         s.dispos[ep.id] &&
@@ -90,7 +105,7 @@ const Repartition = {
       candidats.sort((a, b) =>
         ratio(a) - ratio(b) ||
         charge[a.id].creneaux - charge[b.id].creneaux ||
-        (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr'));
+        alea[a.id] - alea[b.id]);
       return candidats[0];
     };
 
@@ -109,7 +124,18 @@ const Repartition = {
         }
       });
 
-      // 2) Réserve : pourvue comme les autres postes
+      // 2) Réserve TIERS TEMPS : présente jusqu'à la fin du TT, pourvue en premier
+      let besoinTT = (AppData.params.nbReservesTT || 0) - AppData.getReserveTT(ep.id).length;
+      while (besoinTT > 0) {
+        const elu = choisir(ep);
+        if (!elu) { manquants += besoinTT; break; }
+        AppData.mettreEnReserveTT(ep.id, elu.id);
+        charge[elu.id].minutes += AppData.dureeTiersTemps(ep.duree);
+        charge[elu.id].creneaux++;
+        pourvus++; besoinTT--;
+      }
+
+      // 3) Réserve : pourvue comme les autres postes
       let besoinRes = (AppData.params.nbReserves || 0) - AppData.getReserve(ep.id).length;
       while (besoinRes > 0) {
         const elu = choisir(ep);
@@ -130,12 +156,30 @@ const Repartition = {
   },
 
   vider() {
-    AppData.affectations = {};
-    AppData.reserves = {};
-    AppData.verrous = {};
+    // « Tout effacer » respecte les affectations figées 📌 : seules les autres sautent.
+    let nbFiges = 0;
+    Object.keys(AppData.affectations).forEach(epId => {
+      Object.keys(AppData.affectations[epId]).forEach(sid => {
+        const gardes = AppData.affectations[epId][sid].filter(survId => AppData.estVerrouille(epId, sid, survId));
+        nbFiges += gardes.length;
+        AppData.affectations[epId][sid] = gardes;
+      });
+    });
+    Object.keys(AppData.reserves).forEach(epId => {
+      const gardes = AppData.reserves[epId].filter(survId => AppData.estVerrouille(epId, null, survId));
+      nbFiges += gardes.length;
+      AppData.reserves[epId] = gardes;
+    });
+    Object.keys(AppData.reservesTT).forEach(epId => {
+      const gardes = AppData.reservesTT[epId].filter(survId => AppData.estVerrouille(epId, 'RT', survId));
+      nbFiges += gardes.length;
+      AppData.reservesTT[epId] = gardes;
+    });
     Unsaved.marquer();
     this.rendre();
-    notifier('Toutes les affectations ont été effacées (secrétariat et verrous compris).', 'info');
+    notifier(nbFiges
+      ? `Affectations effacées — ${nbFiges} affectation(s) figée(s) 📌 conservée(s). Libérez-les (🔓) pour les effacer.`
+      : 'Toutes les affectations ont été effacées.', 'info');
   },
 
   // ────────────────────────────────────────────────────────────
@@ -144,6 +188,7 @@ const Repartition = {
 
   rendre() {
     $('#opt-nb-reserves').value = AppData.params.nbReserves || 0;
+    $('#opt-nb-reserves-tt').value = AppData.params.nbReservesTT || 0;
     this._rendreStats();
     this._rendreSecretariat();
     this._rendreGrille();
@@ -159,6 +204,8 @@ const Repartition = {
       });
       total += AppData.params.nbReserves || 0;
       pourvus += Math.min(AppData.getReserve(ep.id).length, AppData.params.nbReserves || 0);
+      total += AppData.params.nbReservesTT || 0;
+      pourvus += Math.min(AppData.getReserveTT(ep.id).length, AppData.params.nbReservesTT || 0);
     });
     return { total, pourvus };
   },
@@ -228,6 +275,22 @@ const Repartition = {
       if (!salles.length)
         lignes = '<tr><td colspan="3" class="table-empty">Aucune salle de surveillance associée à cette épreuve.</td></tr>';
 
+      // Ligne réserve TIERS TEMPS — bien identifiable
+      const nbResTT = AppData.params.nbReservesTT || 0;
+      const enReserveTT = AppData.getReserveTT(ep.id);
+      if (nbResTT || enReserveTT.length) {
+        lignes += `
+          <tr class="row-reserve-tt">
+            <td><strong>🛟⏳ Réserve tiers temps</strong>
+              <small style="display:block;color:var(--gray-500)">${nbResTT} souhaité(s) · présence jusqu\u2019à ${AppData.heureFinTT(ep)} (${AppData.formatDuree(AppData.dureeTiersTemps(ep.duree))})</small></td>
+            <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, reserveTT: true })}'>
+              ${this._chips(ep, 'RT', enReserveTT)}
+              ${this._badgeManque(nbResTT - enReserveTT.length)}
+            </td>
+            <td>${this._selectAjout(ep, { reserveTT: true })}</td>
+          </tr>`;
+      }
+
       // Ligne réserve
       const enReserve = AppData.getReserve(ep.id);
       lignes += `
@@ -241,8 +304,8 @@ const Repartition = {
           <td>${this._selectAjout(ep, { reserve: true })}</td>
         </tr>`;
 
-      const pourvusEp = salles.reduce((a, s) => a + AppData.getAffectes(ep.id, s.id).length, 0) + enReserve.length;
-      const totalEp = salles.reduce((a, s) => a + s.nbSurveillants, 0) + nbRes;
+      const pourvusEp = salles.reduce((a, s) => a + AppData.getAffectes(ep.id, s.id).length, 0) + enReserve.length + enReserveTT.length;
+      const totalEp = salles.reduce((a, s) => a + s.nbSurveillants, 0) + nbRes + nbResTT;
 
       return `
         <div class="jury-card">
@@ -289,17 +352,20 @@ const Repartition = {
 
   _chips(ep, salleId, listeIds) {
     const enReserve = salleId === null || salleId === undefined;
+    const enReserveTT = salleId === 'RT';
     const ids = listeIds || AppData.getAffectes(ep.id, salleId);
     return ids.map(id => {
       const s = AppData.getSurveillant(id);
       if (!s) return '';
-      const verrou = AppData.estVerrouille(ep.id, enReserve ? null : salleId, id);
-      const dnd = JSON.stringify(enReserve
-        ? { ep: ep.id, reserve: true, surv: id }
-        : { ep: ep.id, salle: salleId, surv: id });
-      return `<span class="surv-chip ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}"
+      const verrou = AppData.estVerrouille(ep.id, enReserveTT ? 'RT' : (enReserve ? null : salleId), id);
+      const dnd = JSON.stringify(enReserveTT
+        ? { ep: ep.id, reserveTT: true, surv: id }
+        : enReserve
+          ? { ep: ep.id, reserve: true, surv: id }
+          : { ep: ep.id, salle: salleId, surv: id });
+      return `<span class="surv-chip ${enReserveTT ? 'chip-tt' : ''} ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}"
         ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée — l\u2019algorithme la préserve' : 'Glisser pour déplacer ou échanger'}">
-        ${verrou ? '📌 ' : ''}${escHtml(s.nom)} ${escHtml(s.prenom)}
+        ${verrou ? '📌 ' : ''}${enReserveTT ? '⏳ ' : ''}${escHtml(s.nom)} ${escHtml(s.prenom)}${enReserveTT ? ' <span class="chip-tt-label">jusqu\u2019à ' + AppData.heureFinTT(ep) + '</span>' : ''}
         <button class="chip-lock" data-lock='${dnd}' title="${verrou ? 'Libérer cette affectation' : 'Figer : préservée si vous relancez la répartition'}">${verrou ? '🔓' : '📌'}</button>
         <button data-remove='${dnd}' title="Retirer">✕</button></span>`;
     }).join('') || '<span class="calc-attente">Personne</span>';
@@ -325,7 +391,7 @@ const Repartition = {
     zone.querySelectorAll('[data-lock]').forEach(btn =>
       btn.addEventListener('click', () => {
         const d = JSON.parse(btn.dataset.lock);
-        const fige = AppData.basculerVerrou(d.ep, d.reserve ? null : d.salle, d.surv);
+        const fige = AppData.basculerVerrou(d.ep, d.reserveTT ? 'RT' : (d.reserve ? null : d.salle), d.surv);
         Unsaved.marquer();
         DnD.toutRafraichir();
         const s = AppData.getSurveillant(d.surv);
@@ -337,7 +403,8 @@ const Repartition = {
     zone.querySelectorAll('[data-remove]').forEach(btn =>
       btn.addEventListener('click', () => {
         const d = JSON.parse(btn.dataset.remove);
-        if (d.reserve) AppData.retirerReserve(d.ep, d.surv);
+        if (d.reserveTT) AppData.retirerReserveTT(d.ep, d.surv);
+        else if (d.reserve) AppData.retirerReserve(d.ep, d.surv);
         else AppData.desaffecter(d.ep, d.salle, d.surv);
         Unsaved.marquer();
         DnD.toutRafraichir();
@@ -348,7 +415,8 @@ const Repartition = {
         if (!sel.value) return;
         const d = JSON.parse(sel.dataset.add);
         const survId = parseInt(sel.value, 10);
-        if (d.reserve) AppData.mettreEnReserve(d.ep, survId);
+        if (d.reserveTT) AppData.mettreEnReserveTT(d.ep, survId);
+        else if (d.reserve) AppData.mettreEnReserve(d.ep, survId);
         else AppData.affecter(d.ep, d.salle, survId);
         Unsaved.marquer();
         DnD.toutRafraichir();
@@ -455,13 +523,21 @@ const DnD = {
     });
   },
 
-  _retirer(p)  { p.reserve ? AppData.retirerReserve(p.ep, p.surv) : AppData.desaffecter(p.ep, p.salle, p.surv); },
-  _placer(p, survId) { p.reserve ? AppData.mettreEnReserve(p.ep, survId) : AppData.affecter(p.ep, p.salle, survId); },
+  _retirer(p) {
+    if (p.reserveTT) AppData.retirerReserveTT(p.ep, p.surv);
+    else if (p.reserve) AppData.retirerReserve(p.ep, p.surv);
+    else AppData.desaffecter(p.ep, p.salle, p.surv);
+  },
+  _placer(p, survId) {
+    if (p.reserveTT) AppData.mettreEnReserveTT(p.ep, survId);
+    else if (p.reserve) AppData.mettreEnReserve(p.ep, survId);
+    else AppData.affecter(p.ep, p.salle, survId);
+  },
   _nom(id) { const s = AppData.getSurveillant(id); return s ? `${s.nom} ${s.prenom}` : '?'; },
 
   /** Déplacement d'un surveillant vers une autre zone (salle ou réserve) */
   _deplacer(src, dst) {
-    if (src.ep === dst.ep && !dst.reserve === !src.reserve && dst.salle === src.salle) return; // même zone
+    if (src.ep === dst.ep && !dst.reserve === !src.reserve && !dst.reserveTT === !src.reserveTT && dst.salle === src.salle) return; // même zone
 
     const s = AppData.getSurveillant(src.surv);
     if (!s) return;

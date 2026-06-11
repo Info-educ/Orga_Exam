@@ -29,6 +29,7 @@ const AppData = {
     coefBrouillons: 2,              // feuilles de brouillon par candidat
     margeMateriel : 10,             // % de marge sur les fournitures
     nbReserves    : 2,              // surveillants de réserve souhaités par épreuve
+    nbReservesTT  : 1,              // réserve tiers temps : présente jusqu'à la fin du TT
   },
 
   epreuves     : [],
@@ -37,7 +38,8 @@ const AppData = {
   surveillants : [],
   affectations : {},   // { [epreuveId]: { [salleId]: [survId, ...] } }
   reserves     : {},   // { [epreuveId]: [survId, ...] } — personnels de réserve
-  verrous      : {},   // { "epId:salleId|R:survId": true } — affectations figées (préservées par l'algorithme)
+  reservesTT   : {},   // { [epreuveId]: [survId, ...] } — réserve TIERS TEMPS (présente jusqu'à la fin du TT)
+  verrous      : {},   // { "epId:salleId|R|RT:survId": true } — affectations figées (préservées par l'algorithme)
 
   _nextId : { epreuve: 1, salle: 1, amenagement: 1, surveillant: 1 },
 
@@ -127,6 +129,7 @@ const AppData = {
     this.epreuves.splice(i, 1);
     delete this.affectations[id];                              // nettoyage créneaux fantômes
     delete this.reserves[id];                                  // nettoyage réserve
+    delete this.reservesTT[id];
     this._purgerVerrous(([ep]) => ep === String(id));          // nettoyage verrous
     this.surveillants.forEach(s => delete s.dispos[id]);       // nettoyage dispos
     return true;
@@ -227,6 +230,10 @@ const AppData = {
       scripteur   : !!f.scripteur,
       isolement   : !!f.isolement,
       ordinateur  : !!f.ordinateur,
+      qualiteRedac: !!f.qualiteRedac,
+      avs         : !!f.avs,
+      dictee      : !!f.dictee,
+      calculatrice: !!f.calculatrice,
       autre       : (f.autre || '').trim(),
       salleId     : f.salleId ? parseInt(f.salleId, 10) : null,
       accompagnant: (f.accompagnant || '').trim(),
@@ -268,6 +275,10 @@ const AppData = {
     if (a.scripteur)  b.push('Secrétaire scripteur');
     if (a.isolement)  b.push('Salle à effectif réduit');
     if (a.ordinateur) b.push('Ordinateur');
+    if (a.qualiteRedac) b.push('Non prise en compte de la qualité rédactionnelle dont l\u2019orthographe');
+    if (a.avs)        b.push('Assistance d\u2019un AVS ou AESH');
+    if (a.dictee)     b.push('Dictée aménagée');
+    if (a.calculatrice) b.push('Calculatrice autorisée (simple, non programmable, sans mémoire)');
     if (a.autre)      b.push(a.autre);
     return b;
   },
@@ -315,6 +326,9 @@ const AppData = {
       }));
     Object.keys(this.reserves).forEach(epId => {
       this.reserves[epId] = this.reserves[epId].filter(x => x !== id);
+    });
+    Object.keys(this.reservesTT).forEach(epId => {
+      this.reservesTT[epId] = this.reservesTT[epId].filter(x => x !== id);
     });
     this._purgerVerrous(([, , sv]) => sv === String(id));
     return true;
@@ -406,7 +420,22 @@ const AppData = {
 
   /** Mobilisé = affecté en salle OU placé en réserve sur l'épreuve */
   estMobiliseEpreuve(epId, survId) {
-    return this.estAffecteEpreuve(epId, survId) || this.estEnReserve(epId, survId);
+    return this.estAffecteEpreuve(epId, survId) || this.estEnReserve(epId, survId) || this.estEnReserveTT(epId, survId);
+  },
+
+  getReserveTT(epId)           { return this.reservesTT[epId] || []; },
+  estEnReserveTT(epId, survId) { return this.getReserveTT(epId).includes(survId); },
+
+  mettreEnReserveTT(epId, survId) {
+    if (!this.reservesTT[epId]) this.reservesTT[epId] = [];
+    if (!this.reservesTT[epId].includes(survId)) this.reservesTT[epId].push(survId);
+  },
+
+  retirerReserveTT(epId, survId) {
+    const l = this.reservesTT[epId] || [];
+    const i = l.indexOf(survId);
+    if (i !== -1) l.splice(i, 1);
+    this.retirerVerrou(epId, 'RT', survId);
   },
 
   mettreEnReserve(epId, survId) {
@@ -453,6 +482,10 @@ const AppData = {
         creneaux++;
         minutes += ep.duree;
       }
+      if (this.estEnReserveTT(ep.id, survId)) { // réserve tiers temps : jusqu'à la fin du TT
+        creneaux++;
+        minutes += this.dureeTiersTemps(ep.duree);
+      }
     });
     return { creneaux, minutes };
   },
@@ -472,6 +505,7 @@ const AppData = {
       surveillants: this.surveillants,
       affectations: this.affectations,
       reserves: this.reserves,
+      reservesTT: this.reservesTT,
       verrous: this.verrous,
       _nextId: this._nextId,
     };
@@ -486,6 +520,7 @@ const AppData = {
     this.surveillants = obj.surveillants || [];
     this.affectations = obj.affectations || {};
     this.reserves = obj.reserves || {};
+    this.reservesTT = obj.reservesTT || {};
     this.verrous = obj.verrous || {};
     this._nextId = { ...this._nextId, ...(obj._nextId || {}) };
     this._sortEpreuves();
