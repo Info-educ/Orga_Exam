@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orga Examens — Organisation des examens</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="css/style.css?v=1" />
+</head>
+<body>
+
+  <div class="app-layout">
+
+    <!-- ── SIDEBAR ─────────────────────────────────────────── -->
+    <aside class="sidebar">
+
+      <div class="sidebar-brand">
+        <span class="sidebar-logo" aria-hidden="true">◈</span>
+        <div>
+          <div class="sidebar-title">Orga Examens</div>
+          <div class="sidebar-subtitle">Pilotage des épreuves</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" role="tablist" aria-label="Navigation">
+        <button class="nav-item nav-item-params" id="btn-open-params-nav" aria-label="Ouvrir les paramètres">
+          <span class="nav-item-icon">⚙</span><span class="nav-item-label">Paramètres</span>
+        </button>
+        <div class="nav-separator"></div>
+
+        <button class="nav-item active" role="tab" data-tab="epreuves" aria-selected="true">
+          <span class="nav-item-icon">📅</span><span class="nav-item-label">Épreuves</span>
+        </button>
+        <button class="nav-item" role="tab" data-tab="salles" aria-selected="false">
+          <span class="nav-item-icon">🚪</span><span class="nav-item-label">Salles &amp; besoins</span>
+        </button>
+        <button class="nav-item" role="tab" data-tab="amenagements" aria-selected="false">
+          <span class="nav-item-icon">♿</span><span class="nav-item-label">Aménagements</span>
+        </button>
+        <button class="nav-item" role="tab" data-tab="surveillants" aria-selected="false">
+          <span class="nav-item-icon">👥</span><span class="nav-item-label">Surveillants</span>
+        </button>
+        <button class="nav-item" role="tab" data-tab="repartition" aria-selected="false">
+          <span class="nav-item-icon">⚖</span><span class="nav-item-label">Répartition</span>
+        </button>
+        <button class="nav-item" role="tab" data-tab="recap" aria-selected="false">
+          <span class="nav-item-icon">📋</span><span class="nav-item-label">Récapitulatif</span>
+        </button>
+        <button class="nav-item" role="tab" data-tab="impressions" aria-selected="false">
+          <span class="nav-item-icon">🖨</span><span class="nav-item-label">Impressions</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-actions">
+        <div class="sidebar-section-label">Excel</div>
+        <label class="sidebar-btn sidebar-btn-accent" title="Importer surveillants et salles (modèle ci-dessous)">
+          📥 Importer Excel
+          <input type="file" id="input-import-xlsx" accept=".xlsx,.xls" hidden />
+        </label>
+        <button class="sidebar-btn" id="btn-dl-modele" title="Télécharger le fichier Excel vierge à diffuser (disponibilités par épreuve)">
+          📋 Modèle Excel vierge
+        </button>
+        <button class="sidebar-btn" id="btn-export-xlsx" title="Exporter le planning et les charges en Excel">
+          📤 Exporter Excel
+        </button>
+
+        <div class="sidebar-section-label sidebar-section-label-mt">Session JSON</div>
+        <button class="sidebar-btn sidebar-btn-save" id="btn-export-json" title="Sauvegarder la session complète (réutilisable l'an prochain)">
+          💾 Sauvegarder
+          <span class="save-indicator" id="save-indicator" title="Modifications non sauvegardées">!</span>
+        </button>
+        <label class="sidebar-btn" title="Restaurer une session JSON">
+          📂 Restaurer
+          <input type="file" id="input-import-json" accept=".json" hidden />
+        </label>
+      </div>
+
+      <div class="unsaved-banner" id="unsaved-banner">⚠ Modifications non sauvegardées</div>
+    </aside>
+
+    <!-- ── CONTENU PRINCIPAL ───────────────────────────────── -->
+    <div class="main-wrapper">
+      <main class="app-main">
+
+        <div class="bandeau-session" id="bandeau-session"></div>
+
+        <!-- ═══ ONGLET ÉPREUVES ═══ -->
+        <section class="tab-panel" id="tab-epreuves">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">📅 Calendrier des épreuves</h2>
+              <p class="section-desc">Une ligne par épreuve. La fin avec tiers temps (durée ×4/3) est calculée automatiquement.</p>
+            </div>
+            <button class="btn btn-primary" id="btn-add-epreuve">+ Ajouter une épreuve</button>
+          </div>
+          <div class="counter-bar"><span><span id="count-epreuves">0</span> épreuve(s)</span></div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr><th>#</th><th>Matière</th><th>Début</th><th>Durée</th><th>Fin</th><th>Fin tiers temps</th><th class="col-actions">Actions</th></tr></thead>
+              <tbody id="tbody-epreuves"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ═══ ONGLET SALLES ═══ -->
+        <section class="tab-panel" id="tab-salles" hidden>
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">🚪 Salles &amp; besoins</h2>
+              <p class="section-desc">Salles ordinaires, aménagées (tiers temps) et secrétariat d’examen. Sujets, copies et brouillons calculés selon le nombre de candidats.</p>
+            </div>
+            <button class="btn btn-primary" id="btn-add-salle">+ Ajouter une salle</button>
+          </div>
+          <div class="stats-bar" id="stat-salles"></div>
+          <div class="counter-bar"><span><span id="count-salles">0</span> salle(s)</span></div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr><th>#</th><th>Salle</th><th>Capacité</th><th>Candidats</th><th>Besoins calculés</th><th>Surv.</th><th>Épreuves / matériel</th><th class="col-actions">Actions</th></tr></thead>
+              <tbody id="tbody-salles"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ═══ ONGLET AMÉNAGEMENTS ═══ -->
+        <section class="tab-panel" id="tab-amenagements" hidden>
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">♿ Aménagements &amp; secrétariat d’examen</h2>
+              <p class="section-desc">Tiers temps, secrétaires lecteurs/scripteurs, salles à effectif réduit. RGPD : privilégiez les initiales des candidats.</p>
+            </div>
+            <button class="btn btn-primary" id="btn-add-amenagement">+ Ajouter un candidat</button>
+          </div>
+          <div class="counter-bar"><span><span id="count-amenagements">0</span> candidat(s) à aménagement</span></div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr><th>#</th><th>Candidat</th><th>Classe</th><th>Aménagements</th><th>Salle</th><th>Accompagnant</th><th class="col-actions">Actions</th></tr></thead>
+              <tbody id="tbody-amenagements"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ═══ ONGLET SURVEILLANTS ═══ -->
+        <section class="tab-panel" id="tab-surveillants" hidden>
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">👥 Surveillants &amp; disponibilités</h2>
+              <p class="section-desc">Cochez les disponibilités par épreuve. Boutons ⇄ / ⇅ : tout cocher sur une ligne ou une colonne.</p>
+            </div>
+            <button class="btn btn-primary" id="btn-add-surveillant">+ Ajouter un surveillant</button>
+          </div>
+          <div class="toolbar">
+            <div class="search-box"><span class="search-icon">🔎</span>
+              <input type="text" id="search-surveillants" placeholder="Rechercher un surveillant…">
+            </div>
+            <span class="counter-label"><span id="count-surveillants">0</span> surveillant(s)</span>
+          </div>
+          <div id="zone-dispos"></div>
+        </section>
+
+        <!-- ═══ ONGLET RÉPARTITION ═══ -->
+        <section class="tab-panel" id="tab-repartition" hidden>
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">⚖ Répartition des surveillants</h2>
+              <p class="section-desc">Affectation automatique équilibrée sur les heures de surveillance (les salles aménagées comptent en tiers temps). Ajustements manuels possibles ensuite.</p>
+            </div>
+            <div class="btn-group">
+              <label class="checkbox-label" style="align-self:center">
+                <input type="checkbox" id="opt-conserver"> Conserver les affectations existantes
+              </label>
+              <button class="btn btn-accent" id="btn-lancer-repartition">⚡ Lancer la répartition</button>
+              <button class="btn btn-outline" id="btn-vider-repartition">🗑 Tout effacer</button>
+            </div>
+          </div>
+          <div class="stats-bar" id="stats-repartition"></div>
+          <div class="repartition-zone" id="zone-repartition"></div>
+          <div id="zone-equite"></div>
+        </section>
+
+        <!-- ═══ ONGLET RÉCAP ═══ -->
+        <section class="tab-panel" id="tab-recap" hidden>
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">📋 Récapitulatif</h2>
+              <p class="section-desc">Vue de pilotage : indicateurs, points de vigilance et planning général.</p>
+            </div>
+          </div>
+          <div class="calc-result-grid" id="recap-cartes"></div>
+          <h3 class="sous-titre">Points de vigilance</h3>
+          <div class="alertes-zone" id="recap-alertes"></div>
+          <h3 class="sous-titre">Planning général</h3>
+          <div id="recap-planning"></div>
+        </section>
+
+        <!-- ═══ ONGLET IMPRESSIONS ═══ -->
+        <section class="tab-panel" id="tab-impressions" hidden>
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">🖨 Impressions</h2>
+              <p class="section-desc">Documents prêts à diffuser. Logo, signataire et consignes via Paramètres d’impression.</p>
+            </div>
+            <button class="btn btn-outline" id="btn-print-config">🎨 Paramètres d’impression</button>
+          </div>
+
+          <div class="impressions-grid">
+            <div class="impression-card">
+              <div class="impression-icon">📄</div>
+              <div class="impression-body"><h3>Note d’organisation</h3>
+                <p>Synthèse générale : calendrier, salles, consignes. À diffuser aux équipes.</p></div>
+              <button class="btn btn-primary" data-doc="note">Imprimer</button>
+            </div>
+            <div class="impression-card">
+              <div class="impression-icon">🗓</div>
+              <div class="impression-body"><h3>Planning général</h3>
+                <p>Toutes les épreuves, salles et surveillants, jour par jour.</p></div>
+              <button class="btn btn-primary" data-doc="planning">Imprimer</button>
+            </div>
+            <div class="impression-card">
+              <div class="impression-icon">👤</div>
+              <div class="impression-body"><h3>Plannings individuels</h3>
+                <p>Une page par surveillant : créneaux, salles, heure de présence, consignes.</p></div>
+              <button class="btn btn-primary" data-doc="individuels">Imprimer</button>
+            </div>
+            <div class="impression-card">
+              <div class="impression-icon">✍</div>
+              <div class="impression-body"><h3>Feuilles d’émargement</h3>
+                <p>Une page par épreuve : signatures d’arrivée et de départ des surveillants.</p></div>
+              <button class="btn btn-primary" data-doc="emargement">Imprimer</button>
+            </div>
+            <div class="impression-card">
+              <div class="impression-icon">🚪</div>
+              <div class="impression-body"><h3>Affiches portes de salles</h3>
+                <p>A4 paysage en très grand : salle, épreuves, horaires.</p></div>
+              <button class="btn btn-primary" data-doc="affiches">Imprimer</button>
+            </div>
+            <div class="impression-card">
+              <div class="impression-icon">📦</div>
+              <div class="impression-body"><h3>Fiches de préparation des salles</h3>
+                <p>Pour les agents : sujets, copies, brouillons et matériel par salle.</p></div>
+              <button class="btn btn-primary" data-doc="preparation">Imprimer</button>
+            </div>
+            <div class="impression-card">
+              <div class="impression-icon">♿</div>
+              <div class="impression-body"><h3>Récap aménagements</h3>
+                <p>Document confidentiel : candidats, aménagements, salles, accompagnants.</p></div>
+              <button class="btn btn-primary" data-doc="amenagements">Imprimer</button>
+            </div>
+          </div>
+
+          <div class="rgpd-banner">
+            <div class="rgpd-icon">🔒</div>
+            <p><strong>RGPD :</strong> l’application fonctionne intégralement dans votre navigateur. Aucune donnée n’est transmise à un serveur, aucun cookie n’est déposé. Les fichiers de session restent sous votre responsabilité : stockez-les sur un support sécurisé de l’établissement et limitez la diffusion du récapitulatif des aménagements aux seuls personnels concernés.</p>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Zone notifications -->
+  <div id="notif-zone" aria-live="polite"></div>
+
+  <!-- ═══ MODALS ═══ -->
+  <div class="modal-backdrop" id="modal-backdrop" hidden></div>
+
+  <!-- Modal Paramètres -->
+  <div class="modal" id="modal-params" role="dialog" aria-modal="true" hidden>
+    <div class="modal-inner">
+      <div class="modal-header"><h3>⚙ Paramètres de la session</h3>
+        <button class="modal-close" aria-label="Fermer">✕</button></div>
+      <form class="modal-form" id="form-params">
+        <fieldset class="form-fieldset"><legend>Examen</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="param-examen">Examen <span class="required">*</span></label>
+              <select id="param-examen">
+                <option value="DNB">DNB</option>
+                <option value="DNB_BLANC">DNB blanc</option>
+                <option value="BAC_BLANC">Baccalauréat blanc</option>
+                <option value="CFG">CFG</option>
+                <option value="AUTRE">Autre…</option>
+              </select>
+            </div>
+            <div class="form-group" id="group-examen-autre" hidden>
+              <label for="param-examen-autre">Intitulé</label>
+              <input type="text" id="param-examen-autre" placeholder="Ex. : Certification PIX">
+            </div>
+            <div class="form-group">
+              <label for="param-session">Session</label>
+              <input type="text" id="param-session" placeholder="Juin 2026">
+            </div>
+          </div>
+        </fieldset>
+        <fieldset class="form-fieldset"><legend>Établissement</legend>
+          <div class="form-row">
+            <div class="form-group full">
+              <label for="param-etablissement">Établissement</label>
+              <input type="text" id="param-etablissement" placeholder="Collège …">
+            </div>
+            <div class="form-group">
+              <label for="param-annee">Année scolaire</label>
+              <input type="text" id="param-annee">
+            </div>
+            <div class="form-group">
+              <label for="param-lieu">Lieu de signature</label>
+              <input type="text" id="param-lieu" placeholder="Ville">
+            </div>
+          </div>
+        </fieldset>
+        <fieldset class="form-fieldset"><legend>Fournitures (calcul automatique des besoins)</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="param-coef-copies">Copies doubles / candidat</label>
+              <input type="number" id="param-coef-copies" min="0" step="0.5">
+            </div>
+            <div class="form-group">
+              <label for="param-coef-brouillons">Brouillons / candidat</label>
+              <input type="number" id="param-coef-brouillons" min="0" step="0.5">
+            </div>
+            <div class="form-group">
+              <label for="param-marge">Marge (%)</label>
+              <input type="number" id="param-marge" min="0" max="100">
+            </div>
+          </div>
+        </fieldset>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close-modal>Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Épreuve -->
+  <div class="modal" id="modal-epreuve" role="dialog" aria-modal="true" hidden>
+    <div class="modal-inner">
+      <div class="modal-header"><h3 id="modal-epreuve-titre">Ajouter une épreuve</h3>
+        <button class="modal-close" aria-label="Fermer">✕</button></div>
+      <form class="modal-form" id="form-epreuve">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="ep-date">Date <span class="required">*</span></label>
+            <input type="date" id="ep-date" required>
+          </div>
+          <div class="form-group">
+            <label for="ep-matiere">Matière / épreuve <span class="required">*</span></label>
+            <input type="text" id="ep-matiere" placeholder="Français — 1re partie" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="ep-debut">Heure de début</label>
+            <input type="time" id="ep-debut" value="09:00">
+          </div>
+          <div class="form-group">
+            <label for="ep-duree">Durée (minutes)</label>
+            <input type="number" id="ep-duree" min="10" step="5" value="120">
+          </div>
+        </div>
+        <div class="field-hint" id="ep-apercu"></div>
+        <div class="form-group full">
+          <label for="ep-notes">Notes</label>
+          <input type="text" id="ep-notes" placeholder="Calculatrice autorisée, dictionnaire…">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close-modal>Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Salle -->
+  <div class="modal" id="modal-salle" role="dialog" aria-modal="true" hidden>
+    <div class="modal-inner">
+      <div class="modal-header"><h3 id="modal-salle-titre">Ajouter une salle</h3>
+        <button class="modal-close" aria-label="Fermer">✕</button></div>
+      <form class="modal-form" id="form-salle">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="salle-nom">Salle <span class="required">*</span></label>
+            <input type="text" id="salle-nom" placeholder="101, Réfectoire…" required>
+          </div>
+          <div class="form-group">
+            <label for="salle-type">Type</label>
+            <select id="salle-type">
+              <option value="ordinaire">Ordinaire</option>
+              <option value="amenagee">Aménagée (tiers temps)</option>
+              <option value="secretariat">Secrétariat d’examen</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="salle-capacite">Capacité (places)</label>
+            <input type="number" id="salle-capacite" min="0">
+          </div>
+          <div class="form-group">
+            <label for="salle-candidats">Candidats prévus</label>
+            <input type="number" id="salle-candidats" min="0">
+          </div>
+          <div class="form-group">
+            <label for="salle-nb-surv">Surveillants requis</label>
+            <input type="number" id="salle-nb-surv" min="0" value="2">
+            <span class="field-hint">Repère : 2 en salle ordinaire, 1 en salle aménagée.</span>
+          </div>
+        </div>
+        <fieldset class="form-fieldset"><legend>Épreuves concernées (aucune coche = toutes)</legend>
+          <div class="checkboxes-row" id="salle-epreuves"></div>
+        </fieldset>
+        <div class="form-row">
+          <div class="form-group full">
+            <label for="salle-materiel">Matériel spécifique</label>
+            <input type="text" id="salle-materiel" placeholder="Ordinateur, casque, sujets agrandis…">
+          </div>
+          <div class="form-group full">
+            <label for="salle-notes">Notes</label>
+            <input type="text" id="salle-notes" placeholder="Rez-de-chaussée, accès PMR…">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close-modal>Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Aménagement -->
+  <div class="modal" id="modal-amenagement" role="dialog" aria-modal="true" hidden>
+    <div class="modal-inner">
+      <div class="modal-header"><h3 id="modal-am-titre">Ajouter un candidat à aménagement</h3>
+        <button class="modal-close" aria-label="Fermer">✕</button></div>
+      <form class="modal-form" id="form-amenagement">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="am-candidat">Candidat <span class="required">*</span></label>
+            <input type="text" id="am-candidat" placeholder="Initiales recommandées (ex. : L.M.)" required>
+            <span class="field-hint">RGPD : privilégier les initiales.</span>
+          </div>
+          <div class="form-group">
+            <label for="am-classe">Classe</label>
+            <input type="text" id="am-classe" placeholder="3e B">
+          </div>
+        </div>
+        <fieldset class="form-fieldset"><legend>Aménagements notifiés</legend>
+          <div class="checkboxes-row">
+            <label class="checkbox-label"><input type="checkbox" id="am-tt"> Tiers temps</label>
+            <label class="checkbox-label"><input type="checkbox" id="am-lecteur"> Secrétaire lecteur</label>
+            <label class="checkbox-label"><input type="checkbox" id="am-scripteur"> Secrétaire scripteur</label>
+            <label class="checkbox-label"><input type="checkbox" id="am-isolement"> Salle à effectif réduit</label>
+            <label class="checkbox-label"><input type="checkbox" id="am-ordi"> Ordinateur</label>
+          </div>
+          <div class="form-group full">
+            <label for="am-autre">Autre aménagement</label>
+            <input type="text" id="am-autre" placeholder="Sujets agrandis, pauses…">
+          </div>
+        </fieldset>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="am-salle">Salle d’affectation</label>
+            <select id="am-salle"></select>
+          </div>
+          <div class="form-group">
+            <label for="am-accompagnant">Accompagnant / secrétaire</label>
+            <input type="text" id="am-accompagnant" placeholder="Nom du personnel désigné">
+          </div>
+        </div>
+        <div class="form-group full">
+          <label for="am-notes">Observations</label>
+          <input type="text" id="am-notes">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close-modal>Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Surveillant -->
+  <div class="modal" id="modal-surveillant" role="dialog" aria-modal="true" hidden>
+    <div class="modal-inner">
+      <div class="modal-header"><h3 id="modal-surv-titre">Ajouter un surveillant</h3>
+        <button class="modal-close" aria-label="Fermer">✕</button></div>
+      <form class="modal-form" id="form-surveillant">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="surv-nom">NOM <span class="required">*</span></label>
+            <input type="text" id="surv-nom" required>
+          </div>
+          <div class="form-group">
+            <label for="surv-prenom">Prénom</label>
+            <input type="text" id="surv-prenom">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="surv-fonction">Fonction</label>
+            <select id="surv-fonction">
+              <option>Professeur</option>
+              <option>AED</option>
+              <option>CPE</option>
+              <option>AESH</option>
+              <option>Personnel administratif</option>
+              <option>Autre</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="surv-quota">Quota max de créneaux</label>
+            <input type="number" id="surv-quota" min="0" placeholder="Vide = pas de plafond">
+          </div>
+        </div>
+        <div class="form-group full">
+          <label for="surv-notes">Notes</label>
+          <input type="text" id="surv-notes" placeholder="Préférences, contraintes horaires…">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close-modal>Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Paramètres d'impression -->
+  <div class="modal" id="modal-print-config" role="dialog" aria-modal="true" hidden>
+    <div class="modal-inner">
+      <div class="modal-header"><h3>🎨 Paramètres d’impression</h3>
+        <button class="modal-close" aria-label="Fermer">✕</button></div>
+      <form class="modal-form" id="form-print-config">
+        <fieldset class="form-fieldset"><legend>Logo de l’établissement</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="btn btn-outline" style="cursor:pointer">📁 Choisir une image
+                <input type="file" id="pc-logo" accept="image/*" hidden>
+              </label>
+            </div>
+            <div class="form-group" id="pc-logo-apercu"><span class="field-hint">Aucun logo</span></div>
+            <div class="form-group">
+              <button type="button" class="btn btn-outline" id="pc-logo-suppr">Retirer le logo</button>
+            </div>
+          </div>
+        </fieldset>
+        <fieldset class="form-fieldset"><legend>Signataire</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="pc-genre">Civilité</label>
+              <select id="pc-genre"><option value="M">M.</option><option value="F">Mme</option></select>
+            </div>
+            <div class="form-group">
+              <label for="pc-nom">Nom</label>
+              <input type="text" id="pc-nom">
+            </div>
+            <div class="form-group">
+              <label for="pc-fonction">Fonction</label>
+              <input type="text" id="pc-fonction" value="Principal adjoint">
+            </div>
+          </div>
+        </fieldset>
+        <fieldset class="form-fieldset"><legend>Consignes (une par ligne)</legend>
+          <div class="form-group full">
+            <textarea id="pc-consignes" rows="6"></textarea>
+          </div>
+        </fieldset>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close-modal>Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/parametres.js"></script>
+  <script src="js/salles.js"></script>
+  <script src="js/surveillants.js"></script>
+  <script src="js/repartition.js"></script>
+  <script src="js/recap.js"></script>
+  <script src="js/print.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
