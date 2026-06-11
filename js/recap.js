@@ -30,6 +30,7 @@ const Recap = {
     else if (this.vue === 'demijournees')  this._rendreDemiJournees();
     else if (this.vue === 'reserve')       this._rendreReserve();
     else if (this.vue === 'accompagnants') this._rendreAccompagnants();
+    else if (this.vue === 'secretariat')   this._rendreSecretariat();
     else                                   this._rendrePlanning();
   },
 
@@ -120,7 +121,7 @@ const Recap = {
       const avecReserve = !!(AppData.getReserve(ep.id).length || AppData.params.nbReserves);
       const span = salles.length + (avecReserve ? 1 : 0);
       salles.forEach((salle, i) => {
-        const fin = salle.type === 'amenagee' ? AppData.heureFinTT(ep) : AppData.heureFin(ep);
+        const fin = AppData.heureFinSalle(ep, salle);
         const chips = AppData.getAffectes(ep.id, salle.id).map(id => {
           const s = AppData.getSurveillant(id);
           if (!s) return '';
@@ -190,7 +191,7 @@ const Recap = {
       html += `<div class="table-wrapper"><table class="data-table">
         <thead><tr><th>Date</th><th>Épreuve</th><th>Horaires</th><th>Surveillants</th></tr></thead><tbody>`;
       eps.forEach(ep => {
-        const fin = salle.type === 'amenagee' ? AppData.heureFinTT(ep) : AppData.heureFin(ep);
+        const fin = AppData.heureFinSalle(ep, salle);
         const affectes = AppData.getAffectes(ep.id, salle.id);
         const noms = affectes
           .map(id => { const s = AppData.getSurveillant(id); return s ? `${escHtml(s.nom)} ${escHtml(s.prenom)}` : ''; })
@@ -428,6 +429,96 @@ const Recap = {
     zone.innerHTML = html;
   },
 
+  // ── Vue secrétariat d'examen ─────────────────────────────────
+
+  _rendreSecretariat() {
+    const zone = $('#recap-planning');
+    const sallesSecr = AppData.salles.filter(s => s.type === 'secretariat');
+
+    if (!sallesSecr.length) {
+      zone.innerHTML = '<div class="placeholder-zone">Aucune salle de type <strong>secrétariat d\u2019examen</strong> — créez-la dans l\u2019onglet Salles.</div>';
+      return;
+    }
+
+    let html = `<div class="alerte alerte-info" style="margin-bottom:14px">ℹ Le secrétariat d\u2019examen accompagne les candidats
+      à aménagement : ses horaires sont <strong>alignés sur la fin du tiers temps</strong> et ses heures comptent
+      dans la charge au même titre que la surveillance. Affectation manuelle dans le module Répartition.</div>`;
+
+    // Synthèse par personnel
+    const parPers = new Map();   // survId → [{ ep, salle }]
+    AppData.epreuves.forEach(ep => {
+      sallesSecr.forEach(salle => {
+        if (salle.epreuveIds.length && !salle.epreuveIds.includes(ep.id)) return;
+        AppData.getAffectes(ep.id, salle.id).forEach(id => {
+          if (!parPers.has(id)) parPers.set(id, []);
+          parPers.get(id).push({ ep, salle });
+        });
+      });
+    });
+
+    if (parPers.size) {
+      html += `<h4 class="sous-titre">Personnels du secrétariat</h4>
+        <div class="table-wrapper"><table class="data-table">
+        <thead><tr><th>Personnel</th><th>Fonction</th><th class="text-center">Créneaux</th><th class="text-center">Heures (TT)</th><th>Détail</th></tr></thead><tbody>`;
+      [...parPers.entries()]
+        .map(([id, crs]) => ({ s: AppData.getSurveillant(id), crs }))
+        .filter(x => x.s)
+        .sort((a, b) => (a.s.nom + a.s.prenom).localeCompare(b.s.nom + b.s.prenom, 'fr'))
+        .forEach(({ s, crs }) => {
+          const minutes = crs.reduce((a, c) => a + AppData.dureeCreneau(c.ep, c.salle), 0);
+          html += `<tr>
+            <td><strong>${escHtml(s.nom)}</strong> ${escHtml(s.prenom)}</td>
+            <td>${escHtml(s.fonction || '')}</td>
+            <td class="text-center">${crs.length}</td>
+            <td class="text-center"><strong>${AppData.formatDuree(minutes)}</strong></td>
+            <td style="font-size:.82rem">${crs.map(c =>
+              `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — ${escHtml(c.salle.nom)} (${c.ep.heureDebut}–${AppData.heureFinSalle(c.ep, c.salle)})`).join('<br>')}</td>
+          </tr>`;
+        });
+      html += '</tbody></table></div>';
+    }
+
+    // Détail par épreuve
+    html += '<h4 class="sous-titre">Détail par épreuve</h4>';
+    AppData.epreuves.forEach(ep => {
+      const salles = sallesSecr.filter(s => !s.epreuveIds.length || s.epreuveIds.includes(ep.id));
+      if (!salles.length) return;
+
+      salles.forEach(salle => {
+        const affectes = AppData.getAffectes(ep.id, salle.id);
+        const manque = salle.nbSurveillants - affectes.length;
+        const candidats = AppData.amenagements.filter(a => a.salleId === salle.id);
+        const chips = affectes.map(id => {
+          const s = AppData.getSurveillant(id);
+          if (!s) return '';
+          const dnd = JSON.stringify({ ep: ep.id, salle: salle.id, surv: id });
+          return `<span class="surv-chip" draggable="true" data-dnd='${dnd}' title="Glisser pour déplacer ou échanger">${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
+        }).filter(Boolean).join(' ');
+
+        html += `<div class="jury-card">
+          <div class="jury-card-header">
+            <strong>${escHtml(ep.matiere)} — ${escHtml(salle.nom)}</strong>
+            <span class="jury-card-meta">${escHtml(AppData.formatDateCourt(ep.date))} ·
+              ${ep.heureDebut}–${AppData.heureFinSalle(ep, salle)} <span class="badge badge-tt">fin TT</span>
+              ${manque > 0 ? `<span class="badge badge-prio">${manque} manquant(s)</span>` : `<span class="badge badge-secr">${affectes.length}/${salle.nbSurveillants}</span>`}</span>
+          </div>
+          <div style="padding:12px 16px">
+            <div style="margin-bottom:6px"><strong>Personnels</strong></div>
+            <div class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, salle: salle.id })}' style="min-height:32px">
+              ${chips || '<span class="calc-attente">Personne — à affecter dans le module Répartition.</span>'}
+            </div>
+            <div style="margin:10px 0 6px"><strong>Candidats accompagnés</strong> <span class="dispo-count">(rattachés à cette salle)</span></div>
+            ${candidats.length
+              ? candidats.map(a => `<span class="badge badge-secr">${escHtml(a.candidat)}${a.classe ? ' · ' + escHtml(a.classe) : ''}</span> `).join('')
+              : '<span class="calc-attente">Aucun candidat rattaché à cette salle dans les aménagements.</span>'}
+          </div>
+        </div>`;
+      });
+    });
+
+    zone.innerHTML = html;
+  },
+
   // ── Vue accompagnants (lecteurs/scripteurs, AESH…) ───────────
 
   _rendreAccompagnants() {
@@ -483,7 +574,7 @@ const Recap = {
           <td>${AppData.amenagementBadges(a).map(b => escHtml(b)).join(' · ') || '—'}</td>
           <td>${salle ? escHtml(salle.nom) : '<span class="badge badge-warn">À définir</span>'}</td>
           <td style="font-size:.82rem">${eps.length
-            ? eps.map(ep => `${escHtml(AppData.formatDateCourt(ep.date))} ${escHtml(ep.matiere)} (${ep.heureDebut}–${salle.type === 'amenagee' ? AppData.heureFinTT(ep) : AppData.heureFin(ep)})`).join('<br>')
+            ? eps.map(ep => `${escHtml(AppData.formatDateCourt(ep.date))} ${escHtml(ep.matiere)} (${ep.heureDebut}–${AppData.heureFinSalle(ep, salle)})`).join('<br>')
             : '<span class="calc-attente">Salle à définir</span>'}</td>
         </tr>`;
       });

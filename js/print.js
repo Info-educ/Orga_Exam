@@ -128,6 +128,7 @@ const Impressions = {
       preparation  : () => this.fichesPreparation(),
       amenagements : () => this.recapAmenagements(),
       accompagnants: () => this.fichesAccompagnants(),
+      secretariat  : () => this.recapSecretariat(),
     };
     if (fns[doc]) fns[doc]();
   },
@@ -251,7 +252,7 @@ const Impressions = {
         <tr><th>Épreuve</th><th>Horaires</th><th>Salle</th><th>Candidats</th><th>Surveillants</th></tr>`;
       AppData.epreuves.filter(e => e.date === jour).forEach(ep => {
         AppData.sallesPourEpreuve(ep.id).forEach(salle => {
-          const fin = salle.type === 'amenagee' ? AppData.heureFinTT(ep) : AppData.heureFin(ep);
+          const fin = AppData.heureFinSalle(ep, salle);
           const noms = AppData.getAffectes(ep.id, salle.id)
             .map(id => { const s = AppData.getSurveillant(id); return s ? `${escHtml(s.nom)} ${escHtml(s.prenom)}` : ''; })
             .filter(Boolean).join(', ') || '<span class="badge badge-warn">Non pourvu</span>';
@@ -282,7 +283,7 @@ const Impressions = {
       AppData.epreuves.forEach(ep => {
         AppData.sallesPourEpreuve(ep.id).forEach(salle => {
           if (AppData.getAffectes(ep.id, salle.id).includes(surv.id)) {
-            const fin = salle.type === 'amenagee' ? AppData.heureFinTT(ep) : AppData.heureFin(ep);
+            const fin = AppData.heureFinSalle(ep, salle);
             creneaux.push({ ep, salle, fin });
           }
         });
@@ -355,9 +356,9 @@ const Impressions = {
       corps += `<div class="page"><div class="affiche">
         <div class="bandeau">${escHtml(AppData.libelleExamen())} — Session ${escHtml(AppData.params.session)}</div>
         <div class="salle">Salle ${escHtml(salle.nom)}</div>
-        ${salle.type === 'amenagee' ? '<div class="detail">♿ Salle aménagée — temps majoré</div>' : ''}
+        ${salle.type === 'amenagee' ? '<div class="detail">♿ Salle aménagée — temps majoré</div>' : ''}${salle.type === 'secretariat' ? '<div class="detail">🗂 Secrétariat d\\u2019examen — présence jusqu\\u2019à la fin du tiers temps</div>' : ''}
         <div class="sep"></div>
-        ${eps.map(ep => `<div class="detail"><strong>${escHtml(ep.matiere)}</strong> — ${escHtml(AppData.formatDateCourt(ep.date))} · ${ep.heureDebut}–${salle.type === 'amenagee' ? AppData.heureFinTT(ep) : AppData.heureFin(ep)}</div>`).join('')}
+        ${eps.map(ep => `<div class="detail"><strong>${escHtml(ep.matiere)}</strong> — ${escHtml(AppData.formatDateCourt(ep.date))} · ${ep.heureDebut}–${AppData.heureFinSalle(ep, salle)}</div>`).join('')}
         <div class="sep"></div>
         <div class="detail">Silence — Épreuve en cours</div>
       </div></div>`;
@@ -426,6 +427,48 @@ const Impressions = {
     this._imprimer('Récap aménagements', corps);
   },
 
+  /** Secrétariat d'examen — personnels, horaires tiers temps, candidats accompagnés */
+  recapSecretariat() {
+    const sallesSecr = AppData.salles.filter(s => s.type === 'secretariat');
+    if (!sallesSecr.length) { notifier('Aucune salle de type secrétariat d\u2019examen.', 'error'); return; }
+
+    let lignes = '';
+    AppData.epreuves.forEach(ep => {
+      sallesSecr
+        .filter(salle => !salle.epreuveIds.length || salle.epreuveIds.includes(ep.id))
+        .forEach(salle => {
+          const noms = AppData.getAffectes(ep.id, salle.id)
+            .map(id => { const s = AppData.getSurveillant(id); return s ? `${escHtml(s.nom)} ${escHtml(s.prenom)}` : ''; })
+            .filter(Boolean).join('<br>') || '<span class="badge badge-warn">À pourvoir</span>';
+          const candidats = AppData.amenagements.filter(a => a.salleId === salle.id)
+            .map(a => `${escHtml(a.candidat)}${a.classe ? ' (' + escHtml(a.classe) + ')' : ''}`)
+            .join(', ') || '—';
+          lignes += `<tr>
+            <td>${escHtml(AppData.formatDateCourt(ep.date))}</td>
+            <td><strong>${escHtml(ep.matiere)}</strong></td>
+            <td>${escHtml(salle.nom)}</td>
+            <td><strong>${ep.heureDebut}–${AppData.heureFinSalle(ep, salle)}</strong><br><span class="badge badge-tt">fin du tiers temps</span></td>
+            <td>${noms}</td>
+            <td>${candidats}</td>
+          </tr>`;
+        });
+    });
+
+    if (!lignes) { notifier('Aucune épreuve associée aux salles de secrétariat.', 'error'); return; }
+
+    const corps = `<div class="page">${this._entete('Secrétariat d\u2019examen — organisation')}
+      <div class="bloc bloc-bleu">Document confidentiel — diffusion restreinte (RGPD).
+        Les personnels du secrétariat accompagnent les candidats à aménagement :
+        leur présence est requise <strong>jusqu\u2019à la fin du tiers temps</strong> de chaque épreuve.</div>
+      <table>
+        <tr><th>Date</th><th>Épreuve</th><th>Salle</th><th>Horaires</th><th>Personnels</th><th>Candidats accompagnés</th></tr>
+        ${lignes}
+      </table>
+      ${this._signature()}${this._pied()}
+    </div>`;
+    this._imprimer('Secrétariat d\u2019examen', corps);
+  },
+
   /** 8. Fiches accompagnants — une page par accompagnant (lecteur/scripteur, AESH…) */
   fichesAccompagnants() {
     const avecAcc = AppData.amenagements.filter(a => (a.accompagnant || '').trim());
@@ -461,12 +504,12 @@ const Impressions = {
 
         if (eps.length) {
           corps += `<table>
-            <tr><th>Date</th><th>Épreuve</th><th>Début</th><th>Fin${salle && salle.type === 'amenagee' ? ' (tiers temps)' : ''}</th></tr>
+            <tr><th>Date</th><th>Épreuve</th><th>Début</th><th>Fin${AppData.estHoraireTT(salle) ? ' (tiers temps)' : ''}</th></tr>
             ${eps.map(ep => `<tr>
               <td>${escHtml(AppData.formatDateCourt(ep.date))}</td>
               <td><strong>${escHtml(ep.matiere)}</strong></td>
               <td>${ep.heureDebut}</td>
-              <td>${salle && salle.type === 'amenagee' ? AppData.heureFinTT(ep) : AppData.heureFin(ep)}</td>
+              <td>${AppData.heureFinSalle(ep, salle)}</td>
             </tr>`).join('')}
           </table>`;
         }

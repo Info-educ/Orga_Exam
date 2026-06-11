@@ -390,9 +390,20 @@ const AppData = {
     if (i !== -1) l.splice(i, 1);
   },
 
-  /** Durée de surveillance d'un créneau (salle aménagée = tiers temps) */
+  /** Salle dont l'équipe reste jusqu'à la fin du tiers temps :
+   *  salles aménagées ET secrétariat d'examen (qui accompagne les candidats à aménagement). */
+  estHoraireTT(salle) {
+    return !!salle && (salle.type === 'amenagee' || salle.type === 'secretariat');
+  },
+
+  /** Heure de fin effective pour l'équipe d'une salle */
+  heureFinSalle(ep, salle) {
+    return this.estHoraireTT(salle) ? this.heureFinTT(ep) : this.heureFin(ep);
+  },
+
+  /** Durée de présence d'un créneau (aménagée et secrétariat = tiers temps) */
   dureeCreneau(ep, salle) {
-    return salle.type === 'amenagee' ? this.dureeTiersTemps(ep.duree) : ep.duree;
+    return this.estHoraireTT(salle) ? this.dureeTiersTemps(ep.duree) : ep.duree;
   },
 
   /** Charge cumulée d'un surveillant : { creneaux, minutes } — réserve incluse */
@@ -562,7 +573,7 @@ const AppData = {
         const noms = this.getAffectes(ep.id, salle.id)
           .map(id => { const s = this.getSurveillant(id); return s ? `${s.nom} ${s.prenom}` : ''; })
           .filter(Boolean).join(', ');
-        const fin = salle.type === 'amenagee' ? this.heureFinTT(ep) : this.heureFin(ep);
+        const fin = this.heureFinSalle(ep, salle);
         lignes.push([this.formatDateCourt(ep.date), ep.matiere, `${ep.heureDebut}–${fin}`, salle.nom, this.typeSalleLabel(salle.type), noms]);
       });
     });
