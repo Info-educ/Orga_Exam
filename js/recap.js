@@ -41,6 +41,15 @@ const Recap = {
     const taux = total ? Math.round(pourvus / total * 100) : 0;
     const totCand = AppData.salles.reduce((a, s) => a + (s.type !== 'secretariat' ? s.candidats : 0), 0);
 
+    // Heures effectuées au secrétariat d'examen (durées tiers temps)
+    let minSecr = 0;
+    AppData.epreuves.forEach(ep => {
+      AppData.salles.filter(sa => sa.type === 'secretariat').forEach(salle => {
+        if (salle.epreuveIds.length && !salle.epreuveIds.includes(ep.id)) return;
+        minSecr += AppData.getAffectes(ep.id, salle.id).length * AppData.dureeCreneau(ep, salle);
+      });
+    });
+
     $('#recap-cartes').innerHTML = `
       <div class="calc-card calc-card-primary"><div class="calc-value">${AppData.epreuves.length}</div><div class="calc-label">Épreuves</div></div>
       <div class="calc-card"><div class="calc-value">${AppData.jours().length}</div><div class="calc-label">Jours d\u2019examen</div></div>
@@ -48,6 +57,7 @@ const Recap = {
       <div class="calc-card"><div class="calc-value">${totCand}</div><div class="calc-label">Candidats répartis</div></div>
       <div class="calc-card"><div class="calc-value">${AppData.amenagements.length}</div><div class="calc-label">Aménagements</div></div>
       <div class="calc-card"><div class="calc-value">${AppData.surveillants.length}</div><div class="calc-label">Surveillants</div></div>
+      <div class="calc-card"><div class="calc-value">${AppData.formatDuree(minSecr)}</div><div class="calc-label">Heures secrétariat (TT)</div></div>
       <div class="calc-card ${taux < 100 ? '' : 'calc-card-primary'}"><div class="calc-value">${taux} %</div><div class="calc-label">Postes pourvus (${pourvus}/${total})</div></div>`;
   },
 
@@ -270,7 +280,7 @@ const Recap = {
 
     html += `<div class="table-wrapper"><table class="data-table">
       <thead><tr><th>Surveillant</th><th>Fonction</th><th class="text-center">Créneaux</th>
-      <th class="text-center">Heures</th><th>Charge</th><th>Détail des affectations</th></tr></thead><tbody>`;
+      <th class="text-center">Heures</th><th class="text-center">dont secrétariat</th><th>Charge</th><th>Détail des affectations</th></tr></thead><tbody>`;
 
     lignes.forEach(({ sv, creneaux, minutes }) => {
       const detail = creneaux.map(c =>
@@ -291,6 +301,10 @@ const Recap = {
         <td>${escHtml(sv.fonction || '')}${sv.heuresHebdo ? ` <span class="dispo-count">${sv.heuresHebdo} h/sem</span>` : ''}</td>
         <td class="text-center">${creneaux.length}${sv.quotaMax ? ` / ${sv.quotaMax}` : ''}</td>
         <td class="text-center"><strong>${AppData.formatDuree(minutes)}</strong>${ecartTxt}</td>
+        <td class="text-center">${(() => {
+          const mSecr = creneaux.filter(c => c.salle && c.salle.type === 'secretariat').reduce((a, c) => a + c.duree, 0);
+          return mSecr ? `<span class="badge badge-secr">${AppData.formatDuree(mSecr)}</span>` : '—';
+        })()}</td>
         <td><div class="equite-bar-wrap" style="min-width:90px"><div class="equite-bar" style="width:${pct}%"></div></div></td>
         <td style="font-size:.82rem">${detail}</td>
       </tr>`;
