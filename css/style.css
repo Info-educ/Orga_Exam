@@ -2517,13 +2517,14 @@ div.modal-wide { max-width: 780px; }
 .dispo-table {
   border-collapse: collapse;
   width: 100%;
+  table-layout: fixed;          /* colonnes uniformes, indépendantes du contenu */
   font-size: 0.85rem;
 }
 .dispo-table th, .dispo-table td {
   border: 1px solid #e3e8f0;
-  padding: 6px 8px;
+  padding: 6px 4px;
   text-align: center;
-  white-space: nowrap;
+  overflow: hidden;
 }
 .dispo-table thead th {
   background: var(--blue-900);
@@ -2535,9 +2536,19 @@ div.modal-wide { max-width: 780px; }
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.4px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
-.dispo-col-ep { min-width: 86px; }
-.dispo-ep-mat { display: block; font-weight: 700; font-size: 0.8rem; }
+.dispo-col-ep { width: 76px; }
+.dispo-ep-mat {
+  display: block;
+  font-weight: 700;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;       /* libellé long → tronqué, infobulle au survol */
+  max-width: 100%;
+}
 .dispo-ep-h { display: block; font-weight: 400; font-size: 0.72rem; opacity: 0.85; }
 .dispo-col-nom {
   text-align: left !important;
@@ -2547,7 +2558,9 @@ div.modal-wide { max-width: 780px; }
   z-index: 2;
   font-weight: 600;
   color: var(--blue-900);
-  min-width: 170px;
+  width: 185px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   box-shadow: 2px 0 4px rgba(13, 34, 64, 0.06);
 }
 .dispo-table thead .dispo-col-nom { background: var(--blue-900); z-index: 3; }
@@ -2690,4 +2703,36 @@ div.modal-wide { max-width: 780px; }
 @media (max-width: 760px) {
   .equite-row { grid-template-columns: 120px 1fr 80px; }
   .bandeau-session { padding: 8px 14px; font-size: 0.82rem; }
+}
+
+/* --- Sélecteur de vues (Récap) --- */
+.vue-switcher {
+  display: inline-flex;
+  gap: 4px;
+  background: #eef1f6;
+  border: 1px solid var(--border, #d8dee9);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 16px;
+}
+.vue-btn {
+  border: none;
+  background: none;
+  padding: 7px 16px;
+  border-radius: 7px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--blue-800);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.vue-btn:hover { background: #fff; }
+.vue-btn.active {
+  background: var(--blue-900);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(13, 34, 64, 0.25);
+}
+@media (max-width: 640px) {
+  .vue-switcher { flex-wrap: wrap; }
 }

@@ -88,7 +88,7 @@ const Surveillants = {
     const jours = AppData.jours();
     const epParJour = jours.map(j => ({ jour: j, eps: AppData.epreuves.filter(e => e.date === j) }));
 
-    let html = `<div class="table-wrapper dispo-wrapper"><table class="data-table dispo-table">
+    let html = `<div class="table-wrapper dispo-wrapper"><table class="data-table dispo-table" style="min-width:${185 + AppData.epreuves.length * 76}px">
       <thead>
         <tr>
           <th rowspan="2" class="dispo-col-nom">Surveillant</th>
@@ -98,7 +98,7 @@ const Surveillants = {
         </tr>
         <tr>
           ${AppData.epreuves.map(ep => `
-            <th class="dispo-col-ep">
+            <th class="dispo-col-ep" title="${escHtml(ep.matiere)} — ${ep.heureDebut}">
               <span class="dispo-ep-mat">${escHtml(ep.matiere)}</span>
               <span class="dispo-ep-h">${ep.heureDebut}</span>
               <button class="dispo-toggle-col" data-col="${ep.id}" title="Tout cocher / décocher cette épreuve">⇅</button>

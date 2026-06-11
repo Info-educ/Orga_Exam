@@ -27,7 +27,8 @@ const PrintConfig = {
     if (!p.impression) p.impression = {};
     const d = p.impression;
     return {
-      logoBase64   : d.logoBase64 || null,
+      logoBase64      : d.logoBase64 || null,
+      signatureBase64 : d.signatureBase64 || null,
       fonctionSign : d.fonctionSign || 'Principal adjoint',
       genreSign    : d.genreSign || 'M',
       nomSign      : d.nomSign || '',
@@ -59,10 +60,15 @@ const Impressions = {
 
     $('#btn-print-config').addEventListener('click', () => this.ouvrirConfig());
     $('#form-print-config').addEventListener('submit', (e) => { e.preventDefault(); this.enregistrerConfig(); });
-    $('#pc-logo').addEventListener('change', (e) => this._chargerLogo(e));
+    $('#pc-logo').addEventListener('change', (e) => this._chargerImage(e, 'logoBase64', '#pc-logo-apercu', 'Logo'));
     $('#pc-logo-suppr').addEventListener('click', () => {
       PrintConfig.set({ logoBase64: null });
       $('#pc-logo-apercu').innerHTML = '<span class="field-hint">Aucun logo</span>';
+    });
+    $('#pc-signature').addEventListener('change', (e) => this._chargerImage(e, 'signatureBase64', '#pc-signature-apercu', 'Signature'));
+    $('#pc-signature-suppr').addEventListener('click', () => {
+      PrintConfig.set({ signatureBase64: null });
+      $('#pc-signature-apercu').innerHTML = '<span class="field-hint">Aucune signature</span>';
     });
   },
 
@@ -77,6 +83,9 @@ const Impressions = {
     $('#pc-logo-apercu').innerHTML = c.logoBase64
       ? `<img src="${c.logoBase64}" alt="Logo" style="max-height:50px">`
       : '<span class="field-hint">Aucun logo</span>';
+    $('#pc-signature-apercu').innerHTML = c.signatureBase64
+      ? `<img src="${c.signatureBase64}" alt="Signature" style="max-height:50px">`
+      : '<span class="field-hint">Aucune signature</span>';
     ouvrirModal('modal-print-config');
   },
 
@@ -91,13 +100,13 @@ const Impressions = {
     notifier('Paramètres d\u2019impression enregistrés.');
   },
 
-  _chargerLogo(e) {
+  _chargerImage(e, cle, selApercu, alt) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      PrintConfig.set({ logoBase64: ev.target.result });
-      $('#pc-logo-apercu').innerHTML = `<img src="${ev.target.result}" alt="Logo" style="max-height:50px">`;
+      PrintConfig.set({ [cle]: ev.target.result });
+      $(selApercu).innerHTML = `<img src="${ev.target.result}" alt="${alt}" style="max-height:50px">`;
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -151,6 +160,7 @@ const Impressions = {
       .signature { margin-top: 28px; display: flex; justify-content: flex-end; }
       .signature-bloc { text-align: center; min-width: 220px; }
       .signature-ligne { margin-top: 52px; border-top: 1px solid #6b7280; padding-top: 4px; font-size: 9pt; color: #6b7280; }
+      .signature-img { margin-top: 10px; }
       .pied { margin-top: 14px; font-size: 8pt; color: #9ca3af; text-align: center; }
       .affiche { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 95vh; text-align: center; }
       .affiche .bandeau { background: #0d2240; color: #fff; width: 100%; padding: 16px; font-size: 18pt; font-weight: 700; }
@@ -184,10 +194,14 @@ const Impressions = {
     const c = PrintConfig.get();
     const p = AppData.params;
     const civ = c.genreSign === 'F' ? 'Mme' : 'M.';
+    const img = c.signatureBase64
+      ? `<div class="signature-img"><img src="${c.signatureBase64}" alt="Signature" style="max-height:60px;max-width:200px"></div>`
+      : '';
     return `
       <div class="signature"><div class="signature-bloc">
         Fait à ${escHtml(p.lieuSignature || '__________')}, le ${new Date().toLocaleDateString('fr-FR')}
-        <div class="signature-ligne">${civ} ${escHtml(c.nomSign || '__________')}<br>${escHtml(c.fonctionSign)}</div>
+        ${img}
+        <div class="signature-ligne" ${c.signatureBase64 ? 'style="margin-top:6px"' : ''}>${civ} ${escHtml(c.nomSign || '__________')}<br>${escHtml(c.fonctionSign)}</div>
       </div></div>`;
   },
 

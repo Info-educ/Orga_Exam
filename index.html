@@ -189,6 +189,12 @@
           <h3 class="sous-titre">Points de vigilance</h3>
           <div class="alertes-zone" id="recap-alertes"></div>
           <h3 class="sous-titre">Planning général</h3>
+          <div class="vue-switcher" id="recap-vues">
+            <button class="vue-btn active" data-vue="epreuves">📅 Par épreuve</button>
+            <button class="vue-btn" data-vue="salles">🚪 Par salle</button>
+            <button class="vue-btn" data-vue="surveillants">⏱ Heures par surveillant</button>
+            <button class="vue-btn" data-vue="reserve">🛟 Réserve</button>
+          </div>
           <div id="recap-planning"></div>
         </section>
 
@@ -541,6 +547,20 @@
               <button type="button" class="btn btn-outline" id="pc-logo-suppr">Retirer le logo</button>
             </div>
           </div>
+        </fieldset>
+        <fieldset class="form-fieldset"><legend>Signature manuscrite (image)</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="btn btn-outline" style="cursor:pointer">✍ Choisir une image
+                <input type="file" id="pc-signature" accept="image/*" hidden>
+              </label>
+            </div>
+            <div class="form-group" id="pc-signature-apercu"><span class="field-hint">Aucune signature</span></div>
+            <div class="form-group">
+              <button type="button" class="btn btn-outline" id="pc-signature-suppr">Retirer la signature</button>
+            </div>
+          </div>
+          <p class="field-hint">L'image est insérée au-dessus du nom sur tous les documents. Elle reste stockée localement (RGPD).</p>
         </fieldset>
         <fieldset class="form-fieldset"><legend>Signataire</legend>
           <div class="form-row">
