@@ -328,10 +328,10 @@ body { font-family: var(--font-ui); color: var(--gray-900); background: var(--gr
 /* ── Modals ─────────────────────────────────────────────── */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 200; backdrop-filter: blur(2px); animation: fadeIn .2s ease; }
 @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-dialog.modal { border: none; padding: 0; border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); max-width: 680px; width: calc(100vw - 2rem); max-height: calc(100vh - 2rem); overflow-y: auto; position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 300; animation: modalIn .22s ease; }
-dialog.modal-wide { max-width: 780px; }
+div.modal { border: none; padding: 0; border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); max-width: 680px; width: calc(100vw - 2rem); max-height: calc(100vh - 2rem); overflow-y: auto; position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 300; animation: modalIn .22s ease; background: var(--white, #fff); }
+div.modal-wide { max-width: 780px; }
 @keyframes modalIn { from { opacity:0; transform: translate(-50%, calc(-50% + 12px)); } to { opacity:1; transform: translate(-50%,-50%); } }
-dialog.modal::backdrop { display: none; }
+/* div.modal n'a pas de ::backdrop natif — géré par #modal-backdrop */
 .modal-inner { display: flex; flex-direction: column; }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--gray-200); position: sticky; top: 0; background: var(--white); border-radius: var(--radius-xl) var(--radius-xl) 0 0; z-index: 1; }
 .modal-header h3 { font-size: 1.1rem; font-weight: 700; color: var(--blue-900); }
@@ -399,7 +399,7 @@ dialog.modal::backdrop { display: none; }
 
 @media print {
   /* Masquer l'interface — seul #print-zone s'imprime */
-  .sidebar, .modal-backdrop, dialog.modal, #notif-zone,
+  .sidebar, .modal-backdrop, div.modal, #notif-zone,
   .tab-panel, .unsaved-banner, .params-bandeau,
   .calc-panel, .stats-bar, .section-header,
   .toolbar, .counter-bar, .table-wrapper,
