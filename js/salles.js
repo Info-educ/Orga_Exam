@@ -207,7 +207,61 @@ const Salles = {
     notifier('Aménagement supprimé.', 'warning');
   },
 
+  rendreAccompagnantsEp() {
+    const zone = $('#zone-accomp-ep');
+    if (!zone) return;
+    if (!AppData.epreuves.length) {
+      zone.innerHTML = '<div class="placeholder-zone">Définissez les épreuves pour affecter des accompagnants.</div>';
+      return;
+    }
+
+    const noms = AppData.nomsAccompagnants();
+    const datalist = `<datalist id="dl-accompagnants">${noms.map(n => `<option value="${escHtml(n)}">`).join('')}</datalist>`;
+
+    zone.innerHTML = datalist + `<div class="table-wrapper"><table class="data-table">
+      <thead><tr><th style="width:220px">Épreuve</th><th>Accompagnants (épreuve entière)</th><th style="width:280px">Ajouter</th></tr></thead>
+      <tbody>` + AppData.epreuves.map(ep => `
+        <tr>
+          <td><strong>${escHtml(ep.matiere)}</strong>
+            <small style="display:block;color:var(--gray-500)">${escHtml(AppData.formatDateCourt(ep.date))} · ${ep.heureDebut}–${AppData.heureFinTT(ep)} <span class="badge badge-tt">fin TT</span></small></td>
+          <td>${AppData.getAccompagnantsEp(ep.id).map(n =>
+            `<span class="surv-chip">🤝 ${escHtml(n)}
+              <button data-acc-del='${JSON.stringify({ ep: ep.id, nom: n })}' title="Retirer">✕</button></span>`).join(' ')
+            || '<span class="calc-attente">Personne</span>'}</td>
+          <td style="white-space:nowrap">
+            <input type="text" list="dl-accompagnants" data-acc-input="${ep.id}" placeholder="Nom de l\u2019accompagnant" style="width:190px">
+            <button class="btn btn-outline btn-icon" data-acc-add="${ep.id}" title="Ajouter">+</button>
+          </td>
+        </tr>`).join('') + '</tbody></table></div>';
+
+    zone.querySelectorAll('[data-acc-add]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const epId = parseInt(btn.dataset.accAdd, 10);
+        const input = zone.querySelector(`[data-acc-input="${epId}"]`);
+        if (AppData.ajouterAccompagnantEp(epId, input.value)) {
+          Unsaved.marquer();
+          this.rendreAccompagnantsEp();
+          if (window.Recap) Recap.rendre();
+        } else if (input.value.trim()) {
+          notifier('Cet accompagnant est déjà affecté à cette épreuve.', 'warning');
+        }
+      }));
+    zone.querySelectorAll('[data-acc-input]').forEach(input =>
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); zone.querySelector(`[data-acc-add="${input.dataset.accInput}"]`).click(); }
+      }));
+    zone.querySelectorAll('[data-acc-del]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const d = JSON.parse(btn.dataset.accDel);
+        AppData.retirerAccompagnantEp(d.ep, d.nom);
+        Unsaved.marquer();
+        this.rendreAccompagnantsEp();
+        if (window.Recap) Recap.rendre();
+      }));
+  },
+
   rendreAmenagements() {
+    this.rendreAccompagnantsEp();
     const tbody = $('#tbody-amenagements');
     $('#count-amenagements').textContent = AppData.amenagements.length;
 

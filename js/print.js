@@ -29,11 +29,12 @@ const PrintConfig = {
     return {
       logoBase64      : d.logoBase64 || null,
       signatureBase64 : d.signatureBase64 || null,
+      minutesAvant : d.minutesAvant !== undefined ? d.minutesAvant : 15,
       fonctionSign : d.fonctionSign || 'Principal adjoint',
       genreSign    : d.genreSign || 'M',
       nomSign      : d.nomSign || '',
       consignes    : d.consignes || [
-        'Les surveillants se présentent en salle 15 minutes avant le début de l\u2019épreuve.',
+        'Les surveillants se présentent en salle avant le début de l\u2019épreuve (délai indiqué sur la convocation).',
         'Vérification de l\u2019identité des candidats et émargement à l\u2019entrée.',
         'Téléphones portables éteints et déposés ; aucun document non autorisé.',
         'Aucune sortie définitive avant la fin de la première heure.',
@@ -77,6 +78,7 @@ const Impressions = {
   ouvrirConfig() {
     const c = PrintConfig.get();
     $('#pc-fonction').value = c.fonctionSign;
+    $('#pc-minutes-avant').value = c.minutesAvant;
     $('#pc-genre').value = c.genreSign;
     $('#pc-nom').value = c.nomSign;
     $('#pc-consignes').value = c.consignes.join('\n');
@@ -92,6 +94,7 @@ const Impressions = {
   enregistrerConfig() {
     PrintConfig.set({
       fonctionSign: $('#pc-fonction').value.trim(),
+      minutesAvant: Math.max(0, parseInt($('#pc-minutes-avant').value, 10) || 0),
       genreSign: $('#pc-genre').value,
       nomSign: $('#pc-nom').value.trim(),
       consignes: $('#pc-consignes').value.split('\n').map(l => l.trim()).filter(Boolean),
@@ -296,12 +299,13 @@ const Impressions = {
           ${creneaux.length} créneau(x) de surveillance · charge totale : <strong>${AppData.formatDuree(charge.minutes)}</strong>
         </div>
         <table>
-          <tr><th>Date</th><th>Épreuve</th><th>Salle</th><th>Présence en salle</th><th>Fin</th></tr>
+          <tr><th>Date</th><th>Épreuve</th><th>Présence en salle</th><th>Début de l\u2019épreuve</th><th>Salle</th><th>Fin</th></tr>
           ${creneaux.map(cr => `<tr>
             <td>${escHtml(AppData.formatDate(cr.ep.date))}</td>
             <td><strong>${escHtml(cr.ep.matiere)}</strong></td>
-            <td>${escHtml(cr.salle.nom)}${cr.salle.type === 'amenagee' ? ' <span class="badge badge-tt">Tiers temps</span>' : ''}</td>
-            <td>${AppData.addMinutes(cr.ep.heureDebut, -15)} <small>(15 min avant)</small></td>
+            <td><strong>${AppData.addMinutes(cr.ep.heureDebut, -c.minutesAvant)}</strong> <small>(${c.minutesAvant} min avant)</small></td>
+            <td>${cr.ep.heureDebut}</td>
+            <td>${escHtml(cr.salle.nom)}${cr.salle.type === 'amenagee' ? ' <span class="badge badge-tt">Tiers temps</span>' : ''}${cr.salle.type === 'secretariat' ? ' <span class="badge badge-tt">Secrétariat</span>' : ''}</td>
             <td>${cr.fin}</td></tr>`).join('')}
         </table>
         <h2>Consignes</h2>
@@ -471,12 +475,13 @@ const Impressions = {
 
   /** 8. Fiches accompagnants — une page par accompagnant (lecteur/scripteur, AESH…) */
   fichesAccompagnants() {
-    const avecAcc = AppData.amenagements.filter(a => (a.accompagnant || '').trim());
-    if (!avecAcc.length) { notifier('Aucun accompagnant renseigné dans les aménagements.', 'error'); return; }
+    const heures = AppData.heuresAccompagnants();
+    if (!heures.size) { notifier('Aucun accompagnant renseigné (fiche candidat ou épreuve).', 'error'); return; }
 
-    // Regroupement par accompagnant
+    // Regroupement candidat par accompagnant (les missions par épreuve viennent de heuresAccompagnants)
     const parAcc = new Map();
-    avecAcc.forEach(a => {
+    [...heures.keys()].forEach(nom => parAcc.set(nom, []));
+    AppData.amenagements.filter(a => (a.accompagnant || '').trim()).forEach(a => {
       const cle = a.accompagnant.trim();
       if (!parAcc.has(cle)) parAcc.set(cle, []);
       parAcc.get(cle).push(a);
@@ -484,9 +489,26 @@ const Impressions = {
 
     let corps = '';
     parAcc.forEach((amens, nom) => {
+      const h = heures.get(nom);
+      const missionsEp = (h ? h.creneaux : []).filter(c => c.type === 'epreuve');
       corps += `<div class="page">${this._entete(`Fiche accompagnant — ${escHtml(nom)}`)}
         <div class="bloc bloc-bleu">Document confidentiel — diffusion restreinte (RGPD).
-          Présence requise <strong>15 minutes avant</strong> chaque épreuve.</div>`;
+          Présence requise <strong>${PrintConfig.get().minutesAvant} minutes avant</strong> chaque épreuve.
+          ${h ? `· Total : <strong>${h.creneaux.length} créneau(x) — ${AppData.formatDuree(h.minutes)}</strong>` : ''}</div>`;
+
+      if (missionsEp.length) {
+        corps += `<h2>Missions sur épreuve entière (plusieurs candidats)</h2>
+          <table>
+            <tr><th>Date</th><th>Épreuve</th><th>Début</th><th>Fin (tiers temps)</th><th>Durée</th></tr>
+            ${missionsEp.map(c => `<tr>
+              <td>${escHtml(AppData.formatDateCourt(c.ep.date))}</td>
+              <td><strong>${escHtml(c.ep.matiere)}</strong></td>
+              <td>${c.ep.heureDebut}</td>
+              <td>${AppData.heureFinTT(c.ep)}</td>
+              <td>${AppData.formatDuree(c.duree)}</td>
+            </tr>`).join('')}
+          </table>`;
+      }
 
       amens.forEach(a => {
         const salle = a.salleId ? AppData.getSalle(a.salleId) : null;

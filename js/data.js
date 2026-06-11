@@ -38,6 +38,7 @@ const AppData = {
   surveillants : [],
   affectations : {},   // { [epreuveId]: { [salleId]: [survId, ...] } }
   reserves     : {},   // { [epreuveId]: [survId, ...] } — personnels de réserve
+  accompagnantsEp : {},  // { [epreuveId]: [nom, ...] } — accompagnants affectés à l'épreuve entière
   reservesTT   : {},   // { [epreuveId]: [survId, ...] } — réserve TIERS TEMPS (présente jusqu'à la fin du TT)
   verrous      : {},   // { "epId:salleId|R|RT:survId": true } — affectations figées (préservées par l'algorithme)
 
@@ -130,6 +131,7 @@ const AppData = {
     delete this.affectations[id];                              // nettoyage créneaux fantômes
     delete this.reserves[id];                                  // nettoyage réserve
     delete this.reservesTT[id];
+    delete this.accompagnantsEp[id];
     this._purgerVerrous(([ep]) => ep === String(id));          // nettoyage verrous
     this.surveillants.forEach(s => delete s.dispos[id]);       // nettoyage dispos
     return true;
@@ -382,6 +384,74 @@ const AppData = {
     this.retirerVerrou(epId, salleId, survId);   // une affectation retirée perd son verrou
   },
 
+  // ── Accompagnants ────────────────────────────────────────────
+
+  getAccompagnantsEp(epId) { return this.accompagnantsEp[epId] || []; },
+
+  ajouterAccompagnantEp(epId, nom) {
+    nom = (nom || '').trim();
+    if (!nom) return false;
+    if (!this.accompagnantsEp[epId]) this.accompagnantsEp[epId] = [];
+    if (this.accompagnantsEp[epId].some(n => n.toLowerCase() === nom.toLowerCase())) return false;
+    this.accompagnantsEp[epId].push(nom);
+    return true;
+  },
+
+  retirerAccompagnantEp(epId, nom) {
+    const l = this.accompagnantsEp[epId] || [];
+    const i = l.findIndex(n => n === nom);
+    if (i !== -1) l.splice(i, 1);
+  },
+
+  /** Tous les noms d'accompagnants connus (candidats + épreuves), dédupliqués */
+  nomsAccompagnants() {
+    const set = new Map();
+    this.amenagements.forEach(a => { const n = (a.accompagnant || '').trim(); if (n) set.set(n.toLowerCase(), n); });
+    Object.values(this.accompagnantsEp).forEach(l => l.forEach(n => set.set(n.toLowerCase(), n)));
+    return [...set.values()].sort((a, b) => a.localeCompare(b, 'fr'));
+  },
+
+  /**
+   * Heures effectuées par accompagnant :
+   * - auprès d'un candidat : durée de présence de la salle du candidat (TT si aménagée/secrétariat) ;
+   * - sur une épreuve entière : durée tiers temps (les candidats accompagnés composent jusqu'à la fin du TT).
+   * Retourne Map nom → { creneaux: [{ep, duree, type, detail}], minutes }
+   */
+  heuresAccompagnants() {
+    const map = new Map();
+    const entree = (nom) => {
+      const cle = nom.trim();
+      if (!map.has(cle)) map.set(cle, { creneaux: [], minutes: 0 });
+      return map.get(cle);
+    };
+
+    this.amenagements.forEach(a => {
+      const nom = (a.accompagnant || '').trim();
+      if (!nom || !a.salleId) return;
+      const salle = this.getSalle(a.salleId);
+      if (!salle) return;
+      this.epreuves
+        .filter(ep => !salle.epreuveIds.length || salle.epreuveIds.includes(ep.id))
+        .forEach(ep => {
+          const duree = this.dureeCreneau(ep, salle);
+          const e = entree(nom);
+          e.creneaux.push({ ep, duree, type: 'candidat', detail: `${a.candidat} — salle ${salle.nom}` });
+          e.minutes += duree;
+        });
+    });
+
+    this.epreuves.forEach(ep => {
+      this.getAccompagnantsEp(ep.id).forEach(nom => {
+        const duree = this.dureeTiersTemps(ep.duree);
+        const e = entree(nom);
+        e.creneaux.push({ ep, duree, type: 'epreuve', detail: 'Épreuve entière (plusieurs candidats)' });
+        e.minutes += duree;
+      });
+    });
+
+    return map;
+  },
+
   // ── Verrous (affectations figées) ────────────────────────────
 
   _cleVerrou(epId, salleId, survId) {
@@ -506,6 +576,7 @@ const AppData = {
       affectations: this.affectations,
       reserves: this.reserves,
       reservesTT: this.reservesTT,
+      accompagnantsEp: this.accompagnantsEp,
       verrous: this.verrous,
       _nextId: this._nextId,
     };
@@ -521,6 +592,7 @@ const AppData = {
     this.affectations = obj.affectations || {};
     this.reserves = obj.reserves || {};
     this.reservesTT = obj.reservesTT || {};
+    this.accompagnantsEp = obj.accompagnantsEp || {};
     this.verrous = obj.verrous || {};
     this._nextId = { ...this._nextId, ...(obj._nextId || {}) };
     this._sortEpreuves();

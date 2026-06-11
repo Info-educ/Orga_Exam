@@ -137,6 +137,9 @@
               <tbody id="tbody-amenagements"></tbody>
             </table>
           </div>
+          <h3 class="sous-titre">🤝 Accompagnants par épreuve</h3>
+          <p class="section-desc">Pour un accompagnant qui suit <strong>plusieurs candidats sur une même épreuve</strong> (AVS/AESH mutualisé, secrétaire d’examen volant…) : affectez-le ici à l’épreuve entière — sa présence est comptée jusqu’à la fin du tiers temps. L’attribution à un candidat précis se fait dans la fiche du candidat ci-dessus.</p>
+          <div id="zone-accomp-ep"></div>
         </section>
 
         <!-- ═══ ONGLET SURVEILLANTS ═══ -->
@@ -606,6 +609,10 @@
             <div class="form-group">
               <label for="pc-fonction">Fonction</label>
               <input type="text" id="pc-fonction" value="Principal adjoint">
+            </div>
+            <div class="form-group">
+              <label for="pc-minutes-avant">Présence en salle (min avant l’épreuve)</label>
+              <input type="number" id="pc-minutes-avant" min="0" max="120" step="5" value="15">
             </div>
           </div>
         </fieldset>

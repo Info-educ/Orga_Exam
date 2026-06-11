@@ -496,7 +496,13 @@ const Recap = {
     });
 
     if (parPers.size) {
-      html += `<h4 class="sous-titre">Personnels du secrétariat</h4>
+      let totalSecr = 0;
+      parPers.forEach((crs) => crs.forEach(c => { totalSecr += AppData.dureeCreneau(c.ep, c.salle); }));
+      html += `<div class="equite-stats" style="margin:0 0 10px">
+        <span>Personnels du secrétariat : <strong>${parPers.size}</strong></span>
+        <span>Heures totales effectuées (TT) : <strong>${AppData.formatDuree(totalSecr)}</strong></span>
+      </div>
+      <h4 class="sous-titre">Personnels du secrétariat</h4>
         <div class="table-wrapper"><table class="data-table">
         <thead><tr><th>Personnel</th><th>Fonction</th><th class="text-center">Créneaux</th><th class="text-center">Heures (TT)</th><th>Détail</th></tr></thead><tbody>`;
       [...parPers.entries()]
@@ -563,63 +569,57 @@ const Recap = {
 
   _rendreAccompagnants() {
     const zone = $('#recap-planning');
-    const avecAcc = AppData.amenagements.filter(a => (a.accompagnant || '').trim());
-    const sansAcc = AppData.amenagements.filter(a => (a.lecteur || a.scripteur) && !(a.accompagnant || '').trim());
+    const heures = AppData.heuresAccompagnants();
+    const sansAcc = AppData.amenagements.filter(a => (a.lecteur || a.scripteur || a.avs) && !(a.accompagnant || '').trim());
 
-    if (!AppData.amenagements.length) {
-      zone.innerHTML = '<div class="placeholder-zone">Aucun aménagement recensé — renseignez l\u2019onglet <strong>Aménagements</strong>.</div>';
+    if (!AppData.amenagements.length && !heures.size) {
+      zone.innerHTML = '<div class="placeholder-zone">Aucun aménagement ni accompagnant — renseignez l\u2019onglet <strong>Aménagements</strong> (fiche candidat ou panneau « Accompagnants par épreuve »).</div>';
       return;
     }
 
     let html = '';
     if (sansAcc.length)
-      html += `<div class="alerte alerte-warning">⚠ ${sansAcc.length} candidat(s) avec secrétaire lecteur/scripteur
+      html += `<div class="alerte alerte-warning">⚠ ${sansAcc.length} candidat(s) avec besoin d\u2019accompagnement
         <strong>sans accompagnant désigné</strong> : ${sansAcc.map(a => escHtml(a.candidat)).join(', ')}.</div>`;
 
-    if (!avecAcc.length) {
+    if (!heures.size) {
       zone.innerHTML = html + '<div class="placeholder-zone">Aucun accompagnant renseigné pour le moment.</div>';
       return;
     }
 
-    // Regroupement par accompagnant
-    const parAcc = new Map();
-    avecAcc.forEach(a => {
-      const cle = a.accompagnant.trim();
-      if (!parAcc.has(cle)) parAcc.set(cle, []);
-      parAcc.get(cle).push(a);
-    });
-
+    const totalMin = [...heures.values()].reduce((a, e) => a + e.minutes, 0);
     html += `<div class="equite-stats" style="margin:10px 0 14px">
-      <span>Accompagnants : <strong>${parAcc.size}</strong></span>
-      <span>Candidats accompagnés : <strong>${avecAcc.length}</strong></span>
+      <span>Accompagnants : <strong>${heures.size}</strong></span>
+      <span>Heures totales : <strong>${AppData.formatDuree(totalMin)}</strong></span>
     </div>`;
 
-    parAcc.forEach((amens, nom) => {
-      html += `<div class="jury-card">
-        <div class="jury-card-header">
-          <strong>🤝 ${escHtml(nom)}</strong>
-          <span class="jury-card-meta"><span class="badge badge-secr">${amens.length} candidat(s)</span></span>
-        </div>
-        <div class="table-wrapper"><table class="data-table">
-          <thead><tr><th>Candidat</th><th>Classe</th><th>Mission</th><th>Salle</th><th>Épreuves couvertes</th></tr></thead><tbody>`;
-
-      amens.forEach(a => {
-        const salle = a.salleId ? AppData.getSalle(a.salleId) : null;
-        const eps = salle
-          ? AppData.epreuves.filter(ep => !salle.epreuveIds.length || salle.epreuveIds.includes(ep.id))
-          : [];
-        html += `<tr>
-          <td><strong>${escHtml(a.candidat)}</strong></td>
-          <td>${escHtml(a.classe || '—')}</td>
-          <td>${AppData.amenagementBadges(a).map(b => escHtml(b)).join(' · ') || '—'}</td>
-          <td>${salle ? escHtml(salle.nom) : '<span class="badge badge-warn">À définir</span>'}</td>
-          <td style="font-size:.82rem">${eps.length
-            ? eps.map(ep => `${escHtml(AppData.formatDateCourt(ep.date))} ${escHtml(ep.matiere)} (${ep.heureDebut}–${AppData.heureFinSalle(ep, salle)})`).join('<br>')
-            : '<span class="calc-attente">Salle à définir</span>'}</td>
-        </tr>`;
+    [...heures.entries()]
+      .sort((a, b) => b[1].minutes - a[1].minutes || a[0].localeCompare(b[0], 'fr'))
+      .forEach(([nom, e]) => {
+        html += `<div class="jury-card">
+          <div class="jury-card-header">
+            <strong>🤝 ${escHtml(nom)}</strong>
+            <span class="jury-card-meta">
+              <span class="badge badge-secr">${e.creneaux.length} créneau(x)</span>
+              <span class="badge badge-tt">⏱ ${AppData.formatDuree(e.minutes)}</span>
+            </span>
+          </div>
+          <div class="table-wrapper"><table class="data-table">
+            <thead><tr><th>Date</th><th>Épreuve</th><th>Horaires</th><th>Mission</th><th class="text-center">Durée</th></tr></thead><tbody>
+            ${e.creneaux
+              .sort((x, y) => (x.ep.date + x.ep.heureDebut).localeCompare(y.ep.date + y.ep.heureDebut))
+              .map(c => `<tr>
+                <td>${escHtml(AppData.formatDateCourt(c.ep.date))}</td>
+                <td><strong>${escHtml(c.ep.matiere)}</strong></td>
+                <td>${c.ep.heureDebut}–${AppData.addMinutes(c.ep.heureDebut, c.duree)}</td>
+                <td>${c.type === 'epreuve'
+                  ? '<span class="badge badge-tt">Épreuve entière</span> ' + escHtml(c.detail)
+                  : 'Candidat <strong>' + escHtml(c.detail) + '</strong>'}</td>
+                <td class="text-center"><strong>${AppData.formatDuree(c.duree)}</strong></td>
+              </tr>`).join('')}
+          </tbody></table></div>
+        </div>`;
       });
-      html += '</tbody></table></div></div>';
-    });
 
     zone.innerHTML = html;
   },
