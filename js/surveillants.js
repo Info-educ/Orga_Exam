@@ -27,6 +27,7 @@ const Surveillants = {
     $('#surv-prenom').value = s ? s.prenom : '';
     $('#surv-fonction').value = s ? s.fonction : 'Professeur';
     $('#surv-quota').value = s ? (s.quotaMax || '') : '';
+    $('#surv-heures').value = s ? (s.heuresHebdo || '') : '';
     $('#surv-notes').value = s ? s.notes : '';
     ouvrirModal('modal-surveillant');
   },
@@ -37,6 +38,7 @@ const Surveillants = {
       prenom: $('#surv-prenom').value,
       fonction: $('#surv-fonction').value,
       quotaMax: $('#surv-quota').value,
+      heuresHebdo: $('#surv-heures').value,
       notes: $('#surv-notes').value,
     };
     if (!f.nom.trim()) { notifier('Le nom est obligatoire.', 'error'); return; }
@@ -112,7 +114,7 @@ const Surveillants = {
       html += `<tr>
         <td class="dispo-col-nom">
           <strong>${escHtml(s.nom)}</strong> ${escHtml(s.prenom)}
-          <small>${escHtml(s.fonction)}${s.quotaMax ? ` · max ${s.quotaMax} créneaux` : ''}</small>
+          <small>${escHtml(s.fonction)}${s.heuresHebdo ? ` · ${s.heuresHebdo} h/sem` : ''}${s.quotaMax ? ` · max ${s.quotaMax} cr.` : ''}</small>
           <button class="dispo-toggle-row" data-row="${s.id}" title="Tout cocher / décocher pour ce surveillant">⇄</button>
         </td>
         ${AppData.epreuves.map(ep => `

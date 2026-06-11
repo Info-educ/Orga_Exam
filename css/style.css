@@ -2508,7 +2508,8 @@ div.modal-wide { max-width: 780px; }
 
 /* --- Grille de disponibilités --- */
 .dispo-wrapper {
-  overflow-x: auto;
+  overflow: auto;                /* défilement interne : l'en-tête collant reste visible */
+  max-height: calc(100vh - 230px);
   border: 1px solid var(--border, #d8dee9);
   border-radius: 10px;
   background: #fff;
@@ -2530,7 +2531,12 @@ div.modal-wide { max-width: 780px; }
   background: var(--blue-900);
   color: #fff;
   font-weight: 600;
+  position: sticky;              /* en-tête toujours visible au défilement */
+  z-index: 4;
 }
+.dispo-table thead tr:first-child th { top: 0; height: 36px; }
+.dispo-table thead tr:nth-child(2) th { top: 36px; }
+.dispo-table thead tr:first-child th[rowspan] { height: auto; }
 .dispo-col-jour {
   background: var(--blue-800) !important;
   font-size: 0.78rem;
@@ -2563,7 +2569,7 @@ div.modal-wide { max-width: 780px; }
   text-overflow: ellipsis;
   box-shadow: 2px 0 4px rgba(13, 34, 64, 0.06);
 }
-.dispo-table thead .dispo-col-nom { background: var(--blue-900); z-index: 3; }
+.dispo-table thead .dispo-col-nom { background: var(--blue-900); z-index: 6; top: 0; }
 .dispo-cell {
   cursor: pointer;
   width: 38px;

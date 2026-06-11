@@ -279,6 +279,7 @@ const AppData = {
       nom      : (f.nom || '').trim().toUpperCase(),
       prenom   : (f.prenom || '').trim(),
       fonction : (f.fonction || '').trim(),
+      heuresHebdo : parseFloat(String(f.heuresHebdo).replace(',', '.')) || 0,  // 0 = non renseigné (réf. 18 h)
       quotaMax : parseInt(f.quotaMax, 10) || 0,   // 0 = pas de plafond
       dispos   : f.dispos && typeof f.dispos === 'object' ? { ...f.dispos } : {},
       notes    : (f.notes || '').trim(),
@@ -294,6 +295,7 @@ const AppData = {
     s.nom = (f.nom || '').trim().toUpperCase();
     s.prenom = (f.prenom || '').trim();
     s.fonction = (f.fonction || '').trim();
+    s.heuresHebdo = parseFloat(String(f.heuresHebdo).replace(',', '.')) || 0;
     s.quotaMax = parseInt(f.quotaMax, 10) || 0;
     s.notes = (f.notes || '').trim();
     this._sortSurveillants();
@@ -475,8 +477,8 @@ const AppData = {
 
     // Feuille Surveillants : 1 colonne par épreuve définie
     const colsDispos = this.epreuves.map(ep => this._colDispo(ep));
-    const entetes = ['NOM', 'Prénom', 'Fonction', ...colsDispos];
-    const exemple = ['DUPONT', 'Marie', 'Professeur', ...colsDispos.map(() => 'O')];
+    const entetes = ['NOM', 'Prénom', 'Fonction', 'Heures hebdo', ...colsDispos];
+    const exemple = ['DUPONT', 'Marie', 'Professeur', 18, ...colsDispos.map(() => 'O')];
     const wsS = XLSX.utils.aoa_to_sheet([entetes, exemple]);
     XLSX.utils.book_append_sheet(wb, wsS, 'Surveillants');
 
@@ -515,7 +517,9 @@ const AppData = {
             });
             this.addSurveillant({
               nom, prenom: String(r['Prénom'] || r['Prenom'] || '').trim(),
-              fonction: String(r['Fonction'] || '').trim(), dispos,
+              fonction: String(r['Fonction'] || '').trim(),
+              heuresHebdo: r['Heures hebdo'] || r['Heures'] || 0,
+              dispos,
             });
             nbS++;
           });

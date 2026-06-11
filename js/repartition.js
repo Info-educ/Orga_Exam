@@ -68,6 +68,14 @@ const Repartition = {
 
     let pourvus = 0, manquants = 0;
 
+    /**
+     * Choix pondéré par la quotité hebdomadaire :
+     * on minimise minutes / heuresHebdo (référence 18 h si non renseigné).
+     * Ainsi un 18 h surveille 2× plus qu'un 9 h — mais tous les postes
+     * sont pourvus tant qu'il reste un candidat (le ratio n'est jamais bloquant).
+     */
+    const poids = (s) => s.heuresHebdo > 0 ? s.heuresHebdo : 18;
+    const ratio = (s) => charge[s.id].minutes / poids(s);
     const choisir = (ep) => {
       const candidats = AppData.surveillants.filter(s =>
         s.dispos[ep.id] &&
@@ -75,7 +83,7 @@ const Repartition = {
         (!s.quotaMax || charge[s.id].creneaux < s.quotaMax));
       if (!candidats.length) return null;
       candidats.sort((a, b) =>
-        charge[a.id].minutes - charge[b.id].minutes ||
+        ratio(a) - ratio(b) ||
         charge[a.id].creneaux - charge[b.id].creneaux ||
         (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr'));
       return candidats[0];
@@ -333,24 +341,29 @@ const Repartition = {
     const zone = $('#zone-equite');
     if (!AppData.surveillants.length) { zone.innerHTML = ''; return; }
 
-    const charges = AppData.surveillants.map(s => ({ s, ...AppData.chargeSurveillant(s.id) }));
-    const maxMin = Math.max(1, ...charges.map(c => c.minutes));
+    const charges = AppData.surveillants.map(s => {
+      const c = AppData.chargeSurveillant(s.id);
+      const poids = s.heuresHebdo > 0 ? s.heuresHebdo : 18;
+      return { s, ...c, poids, pondere: c.minutes * 18 / poids };  // ramené à l'équivalent 18 h
+    });
+    const maxMin = Math.max(1, ...charges.map(c => c.pondere));
     const actifs = charges.filter(c => c.creneaux > 0);
     const moyenne = actifs.length ? actifs.reduce((a, c) => a + c.minutes, 0) / actifs.length : 0;
     const ecart = actifs.length
-      ? Math.sqrt(actifs.reduce((a, c) => a + Math.pow(c.minutes - moyenne, 2), 0) / actifs.length) : 0;
+      ? Math.sqrt(actifs.reduce((a, c) => a + Math.pow(c.pondere - (actifs.reduce((x, y) => x + y.pondere, 0) / actifs.length), 2), 0) / actifs.length) : 0;
 
     zone.innerHTML = `
       <div class="calc-panel">
-        <div class="calc-titre">⚖ Équité de la répartition <small style="font-weight:400">(surveillance + secrétariat + réserve)</small></div>
+        <div class="calc-titre">⚖ Équité de la répartition <small style="font-weight:400">(surveillance + secrétariat + réserve, pondérée par la quotité hebdomadaire)</small></div>
         <div class="calc-desc">Charge moyenne : <strong>${AppData.formatDuree(Math.round(moyenne))}</strong>
-          · Écart-type : <strong>${Math.round(ecart)} min</strong>
-          · ${charges.filter(c => !c.creneaux).length} surveillant(s) sans créneau</div>
+          · Écart-type pondéré : <strong>${Math.round(ecart)} min éq. 18 h</strong>
+          · ${charges.filter(c => !c.creneaux).length} surveillant(s) sans créneau
+          — les barres représentent la charge <strong>ramenée à 18 h/sem</strong> : à barres égales, répartition équitable.</div>
         <div class="equite-grid">
-          ${charges.sort((a, b) => b.minutes - a.minutes).map(c => `
+          ${charges.sort((a, b) => b.pondere - a.pondere).map(c => `
             <div class="equite-row">
-              <span class="equite-nom">${escHtml(c.s.nom)} ${escHtml(c.s.prenom)}</span>
-              <span class="equite-bar-wrap"><span class="equite-bar" style="width:${Math.round(c.minutes / maxMin * 100)}%"></span></span>
+              <span class="equite-nom">${escHtml(c.s.nom)} ${escHtml(c.s.prenom)}<span class="dispo-count"> ${c.s.heuresHebdo ? c.s.heuresHebdo + ' h/sem' : ''}</span></span>
+              <span class="equite-bar-wrap"><span class="equite-bar" style="width:${Math.round(c.pondere / maxMin * 100)}%"></span></span>
               <span class="equite-val">${c.creneaux} cr. · ${AppData.formatDuree(c.minutes)}</span>
             </div>`).join('')}
         </div>

@@ -127,6 +127,7 @@ const Impressions = {
       affiches     : () => this.affichesPortes(),
       preparation  : () => this.fichesPreparation(),
       amenagements : () => this.recapAmenagements(),
+      accompagnants: () => this.fichesAccompagnants(),
     };
     if (fns[doc]) fns[doc]();
   },
@@ -423,6 +424,58 @@ const Impressions = {
       ${this._signature()}${this._pied()}
     </div>`;
     this._imprimer('Récap aménagements', corps);
+  },
+
+  /** 8. Fiches accompagnants — une page par accompagnant (lecteur/scripteur, AESH…) */
+  fichesAccompagnants() {
+    const avecAcc = AppData.amenagements.filter(a => (a.accompagnant || '').trim());
+    if (!avecAcc.length) { notifier('Aucun accompagnant renseigné dans les aménagements.', 'error'); return; }
+
+    // Regroupement par accompagnant
+    const parAcc = new Map();
+    avecAcc.forEach(a => {
+      const cle = a.accompagnant.trim();
+      if (!parAcc.has(cle)) parAcc.set(cle, []);
+      parAcc.get(cle).push(a);
+    });
+
+    let corps = '';
+    parAcc.forEach((amens, nom) => {
+      corps += `<div class="page">${this._entete(`Fiche accompagnant — ${escHtml(nom)}`)}
+        <div class="bloc bloc-bleu">Document confidentiel — diffusion restreinte (RGPD).
+          Présence requise <strong>15 minutes avant</strong> chaque épreuve.</div>`;
+
+      amens.forEach(a => {
+        const salle = a.salleId ? AppData.getSalle(a.salleId) : null;
+        const roles = AppData.amenagementBadges(a).join(' · ') || '—';
+        const eps = salle
+          ? AppData.epreuves.filter(ep => !salle.epreuveIds.length || salle.epreuveIds.includes(ep.id))
+          : [];
+
+        corps += `<div class="bloc">
+          <strong>Candidat : ${escHtml(a.candidat)}</strong>${a.classe ? ` — classe ${escHtml(a.classe)}` : ''}<br>
+          Mission : ${escHtml(roles)}<br>
+          Salle : <strong>${salle ? escHtml(salle.nom) : 'à définir'}</strong>
+          ${a.notes ? `<br>Observations : ${escHtml(a.notes)}` : ''}
+        </div>`;
+
+        if (eps.length) {
+          corps += `<table>
+            <tr><th>Date</th><th>Épreuve</th><th>Début</th><th>Fin${salle && salle.type === 'amenagee' ? ' (tiers temps)' : ''}</th></tr>
+            ${eps.map(ep => `<tr>
+              <td>${escHtml(AppData.formatDateCourt(ep.date))}</td>
+              <td><strong>${escHtml(ep.matiere)}</strong></td>
+              <td>${ep.heureDebut}</td>
+              <td>${salle && salle.type === 'amenagee' ? AppData.heureFinTT(ep) : AppData.heureFin(ep)}</td>
+            </tr>`).join('')}
+          </table>`;
+        }
+      });
+
+      corps += `${this._signature()}${this._pied()}</div>`;
+    });
+
+    this._imprimer('Fiches accompagnants', corps);
   },
 };
 window.Impressions = Impressions;

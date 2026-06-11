@@ -29,6 +29,7 @@ const Recap = {
     else if (this.vue === 'surveillants')  this._rendreParSurveillant();
     else if (this.vue === 'demijournees')  this._rendreDemiJournees();
     else if (this.vue === 'reserve')       this._rendreReserve();
+    else if (this.vue === 'accompagnants') this._rendreAccompagnants();
     else                                   this._rendrePlanning();
   },
 
@@ -217,7 +218,7 @@ const Recap = {
       return;
     }
 
-    // Détail des créneaux par surveillant
+    // Détail des créneaux par surveillant (réserve incluse : heures travaillées)
     const lignes = AppData.surveillants.map(sv => {
       const creneaux = [];
       AppData.epreuves.forEach(ep => {
@@ -226,6 +227,9 @@ const Recap = {
             creneaux.push({ ep, salle, duree: AppData.dureeCreneau(ep, salle) });
           }
         });
+        if (AppData.estEnReserve(ep.id, sv.id)) {
+          creneaux.push({ ep, salle: null, duree: ep.duree, reserve: true });
+        }
       });
       const minutes = creneaux.reduce((a, c) => a + c.duree, 0);
       return { sv, creneaux, minutes };
@@ -248,8 +252,10 @@ const Recap = {
 
     lignes.forEach(({ sv, creneaux, minutes }) => {
       const detail = creneaux.map(c =>
-        `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — salle ${escHtml(c.salle.nom)}` +
-        `${c.salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''} (${AppData.formatDuree(c.duree)})`
+        c.reserve
+          ? `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — <span class="badge badge-tt">🛟 Réserve</span> (${AppData.formatDuree(c.duree)})`
+          : `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — salle ${escHtml(c.salle.nom)}` +
+            `${c.salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}${c.salle.type === 'secretariat' ? ' <span class="badge badge-secr">Secr.</span>' : ''} (${AppData.formatDuree(c.duree)})`
       ).join('<br>') || '<span class="calc-attente">Aucune affectation</span>';
       const pct = Math.round(minutes / maxMin * 100);
       const ecart = moyenne ? minutes - moyenne : 0;
@@ -258,7 +264,7 @@ const Recap = {
 
       html += `<tr ${creneaux.length ? '' : 'style="opacity:.55"'}>
         <td><strong>${escHtml(sv.nom)}</strong> ${escHtml(sv.prenom)}</td>
-        <td>${escHtml(sv.fonction || '')}</td>
+        <td>${escHtml(sv.fonction || '')}${sv.heuresHebdo ? ` <span class="dispo-count">${sv.heuresHebdo} h/sem</span>` : ''}</td>
         <td class="text-center">${creneaux.length}${sv.quotaMax ? ` / ${sv.quotaMax}` : ''}</td>
         <td class="text-center"><strong>${AppData.formatDuree(minutes)}</strong>${ecartTxt}</td>
         <td><div class="equite-bar-wrap" style="min-width:90px"><div class="equite-bar" style="width:${pct}%"></div></div></td>
@@ -417,6 +423,71 @@ const Recap = {
               </span>`).join(' ')
             : '<span class="calc-attente">Aucun — tous les disponibles sont mobilisés sur cette épreuve.</span>'}
         </div></div>`;
+    });
+
+    zone.innerHTML = html;
+  },
+
+  // ── Vue accompagnants (lecteurs/scripteurs, AESH…) ───────────
+
+  _rendreAccompagnants() {
+    const zone = $('#recap-planning');
+    const avecAcc = AppData.amenagements.filter(a => (a.accompagnant || '').trim());
+    const sansAcc = AppData.amenagements.filter(a => (a.lecteur || a.scripteur) && !(a.accompagnant || '').trim());
+
+    if (!AppData.amenagements.length) {
+      zone.innerHTML = '<div class="placeholder-zone">Aucun aménagement recensé — renseignez l\u2019onglet <strong>Aménagements</strong>.</div>';
+      return;
+    }
+
+    let html = '';
+    if (sansAcc.length)
+      html += `<div class="alerte alerte-warning">⚠ ${sansAcc.length} candidat(s) avec secrétaire lecteur/scripteur
+        <strong>sans accompagnant désigné</strong> : ${sansAcc.map(a => escHtml(a.candidat)).join(', ')}.</div>`;
+
+    if (!avecAcc.length) {
+      zone.innerHTML = html + '<div class="placeholder-zone">Aucun accompagnant renseigné pour le moment.</div>';
+      return;
+    }
+
+    // Regroupement par accompagnant
+    const parAcc = new Map();
+    avecAcc.forEach(a => {
+      const cle = a.accompagnant.trim();
+      if (!parAcc.has(cle)) parAcc.set(cle, []);
+      parAcc.get(cle).push(a);
+    });
+
+    html += `<div class="equite-stats" style="margin:10px 0 14px">
+      <span>Accompagnants : <strong>${parAcc.size}</strong></span>
+      <span>Candidats accompagnés : <strong>${avecAcc.length}</strong></span>
+    </div>`;
+
+    parAcc.forEach((amens, nom) => {
+      html += `<div class="jury-card">
+        <div class="jury-card-header">
+          <strong>🤝 ${escHtml(nom)}</strong>
+          <span class="jury-card-meta"><span class="badge badge-secr">${amens.length} candidat(s)</span></span>
+        </div>
+        <div class="table-wrapper"><table class="data-table">
+          <thead><tr><th>Candidat</th><th>Classe</th><th>Mission</th><th>Salle</th><th>Épreuves couvertes</th></tr></thead><tbody>`;
+
+      amens.forEach(a => {
+        const salle = a.salleId ? AppData.getSalle(a.salleId) : null;
+        const eps = salle
+          ? AppData.epreuves.filter(ep => !salle.epreuveIds.length || salle.epreuveIds.includes(ep.id))
+          : [];
+        html += `<tr>
+          <td><strong>${escHtml(a.candidat)}</strong></td>
+          <td>${escHtml(a.classe || '—')}</td>
+          <td>${AppData.amenagementBadges(a).map(b => escHtml(b)).join(' · ') || '—'}</td>
+          <td>${salle ? escHtml(salle.nom) : '<span class="badge badge-warn">À définir</span>'}</td>
+          <td style="font-size:.82rem">${eps.length
+            ? eps.map(ep => `${escHtml(AppData.formatDateCourt(ep.date))} ${escHtml(ep.matiere)} (${ep.heureDebut}–${salle.type === 'amenagee' ? AppData.heureFinTT(ep) : AppData.heureFin(ep)})`).join('<br>')
+            : '<span class="calc-attente">Salle à définir</span>'}</td>
+        </tr>`;
+      });
+      html += '</tbody></table></div></div>';
     });
 
     zone.innerHTML = html;
