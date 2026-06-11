@@ -2736,3 +2736,23 @@ div.modal-wide { max-width: 780px; }
 @media (max-width: 640px) {
   .vue-switcher { flex-wrap: wrap; }
 }
+
+/* --- Drag & drop des surveillants --- */
+.surv-chip[draggable="true"] { cursor: grab; }
+.surv-chip.dragging { opacity: 0.45; cursor: grabbing; }
+.dnd-zone { min-height: 30px; transition: background 0.12s, box-shadow 0.12s; }
+.dnd-zone.drag-over {
+  background: #ecfdf5;
+  box-shadow: inset 0 0 0 2px var(--teal-500, #0d9488);
+  border-radius: 6px;
+}
+.surv-chip.drag-over {
+  box-shadow: 0 0 0 2px var(--amber-400);
+  background: #fef3c7;
+}
+
+/* --- Ligne réserve dans les tableaux --- */
+.row-reserve td {
+  background: #fffbeb;
+  border-top: 2px dashed #fcd34d;
+}

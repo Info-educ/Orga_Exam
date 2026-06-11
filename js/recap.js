@@ -25,10 +25,11 @@ const Recap = {
   },
 
   _rendreVue() {
-    if (this.vue === 'salles')            this._rendreParSalle();
-    else if (this.vue === 'surveillants') this._rendreParSurveillant();
-    else if (this.vue === 'reserve')      this._rendreReserve();
-    else                                  this._rendrePlanning();
+    if (this.vue === 'salles')             this._rendreParSalle();
+    else if (this.vue === 'surveillants')  this._rendreParSurveillant();
+    else if (this.vue === 'demijournees')  this._rendreDemiJournees();
+    else if (this.vue === 'reserve')       this._rendreReserve();
+    else                                   this._rendrePlanning();
   },
 
   // ── Indicateurs ──────────────────────────────────────────────
@@ -115,20 +116,39 @@ const Recap = {
           <td>${ep.heureDebut}–${AppData.heureFin(ep)}</td><td colspan="3" class="calc-attente">Aucune salle associée</td></tr>`;
         return;
       }
+      const avecReserve = !!(AppData.getReserve(ep.id).length || AppData.params.nbReserves);
+      const span = salles.length + (avecReserve ? 1 : 0);
       salles.forEach((salle, i) => {
         const fin = salle.type === 'amenagee' ? AppData.heureFinTT(ep) : AppData.heureFin(ep);
-        const noms = AppData.getAffectes(ep.id, salle.id)
-          .map(id => { const s = AppData.getSurveillant(id); return s ? `${escHtml(s.nom)} ${escHtml(s.prenom)}` : ''; })
-          .filter(Boolean).join(', ') || '<span class="badge badge-prio">Non pourvu</span>';
+        const chips = AppData.getAffectes(ep.id, salle.id).map(id => {
+          const s = AppData.getSurveillant(id);
+          if (!s) return '';
+          const dnd = JSON.stringify({ ep: ep.id, salle: salle.id, surv: id });
+          return `<span class="surv-chip" draggable="true" data-dnd='${dnd}' title="Glisser pour déplacer ou échanger">${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
+        }).filter(Boolean).join(' ') || '<span class="badge badge-prio">Non pourvu</span>';
         html += `<tr>
-          ${i === 0 ? `<td rowspan="${salles.length}">${escHtml(AppData.formatDateCourt(ep.date))}</td>
-                       <td rowspan="${salles.length}"><strong>${escHtml(ep.matiere)}</strong></td>` : ''}
-          <td>${ep.heureDebut}–${fin}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}</td>
+          ${i === 0 ? `<td rowspan="${span}">${escHtml(AppData.formatDateCourt(ep.date))}</td>
+                       <td rowspan="${span}"><strong>${escHtml(ep.matiere)}</strong></td>` : ''}
+          <td>${ep.heureDebut}–${fin}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}${salle.type === 'secretariat' ? ' <span class="badge badge-secr">Secr.</span>' : ''}</td>
           <td>${escHtml(salle.nom)}</td>
           <td class="text-center">${salle.candidats || '—'}</td>
-          <td>${noms}</td>
+          <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, salle: salle.id })}'>${chips}</td>
         </tr>`;
       });
+      if (avecReserve) {
+        const resChips = AppData.getReserve(ep.id).map(id => {
+          const s = AppData.getSurveillant(id);
+          if (!s) return '';
+          const dnd = JSON.stringify({ ep: ep.id, reserve: true, surv: id });
+          return `<span class="surv-chip" draggable="true" data-dnd='${dnd}' title="Glisser pour déplacer ou échanger">${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
+        }).filter(Boolean).join(' ');
+        html += `<tr class="row-reserve">
+          <td>${ep.heureDebut}–${AppData.heureFin(ep)}</td>
+          <td>🛟 Réserve</td>
+          <td class="text-center">—</td>
+          <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, reserve: true })}'>${resChips || '<span class="calc-attente">Personne</span>'}</td>
+        </tr>`;
+      }
     });
 
     html += '</tbody></table></div>';
@@ -250,6 +270,84 @@ const Recap = {
     zone.innerHTML = html;
   },
 
+  // ── Vue par demi-journée : personnels mobilisés ──────────────
+
+  _rendreDemiJournees() {
+    const zone = $('#recap-planning');
+    if (!AppData.epreuves.length) {
+      zone.innerHTML = '<div class="placeholder-zone">Définissez des épreuves pour visualiser les demi-journées.</div>';
+      return;
+    }
+
+    // Regroupement : date → { matin: [...eps], apresmidi: [...eps] }  (matin = début < 13:00)
+    const parJour = new Map();
+    AppData.epreuves.forEach(ep => {
+      if (!parJour.has(ep.date)) parJour.set(ep.date, { matin: [], apresmidi: [] });
+      parJour.get(ep.date)[ep.heureDebut < '13:00' ? 'matin' : 'apresmidi'].push(ep);
+    });
+
+    let html = '';
+    parJour.forEach((dj, date) => {
+      html += `<h4 class="sous-titre" style="margin-top:18px">${escHtml(AppData.formatDate(date))}</h4>`;
+
+      [['matin', '🌅 Matin'], ['apresmidi', '🌇 Après-midi']].forEach(([cle, titre]) => {
+        const eps = dj[cle];
+        if (!eps.length) return;
+
+        // Mobilisations de la demi-journée : survId → rôles
+        const mob = new Map();   // survId → [{ role, detail }]
+        eps.forEach(ep => {
+          AppData.sallesPourEpreuve(ep.id).forEach(salle => {
+            AppData.getAffectes(ep.id, salle.id).forEach(id => {
+              if (!mob.has(id)) mob.set(id, []);
+              mob.get(id).push({
+                role: salle.type === 'secretariat' ? 'secr' : 'salle',
+                detail: `${ep.matiere} · ${salle.nom}`,
+              });
+            });
+          });
+          AppData.getReserve(ep.id).forEach(id => {
+            if (!mob.has(id)) mob.set(id, []);
+            mob.get(id).push({ role: 'reserve', detail: `${ep.matiere}` });
+          });
+        });
+
+        const lignes = [...mob.entries()]
+          .map(([id, roles]) => ({ s: AppData.getSurveillant(id), roles }))
+          .filter(x => x.s)
+          .sort((a, b) => (a.s.nom + a.s.prenom).localeCompare(b.s.nom + b.s.prenom, 'fr'));
+
+        const plage = `${eps[0].heureDebut}–${eps.map(e => AppData.heureFinTT(e)).sort().pop()}`;
+
+        html += `<div class="jury-card">
+          <div class="jury-card-header">
+            <strong>${titre}</strong>
+            <span class="jury-card-meta">${eps.map(e => escHtml(e.matiere)).join(' · ')} (${plage} avec TT)
+              <span class="badge badge-secr">${lignes.length} mobilisé(s)</span></span>
+          </div>`;
+
+        if (!lignes.length) {
+          html += '<div style="padding:12px 16px"><span class="calc-attente">Aucun personnel mobilisé.</span></div></div>';
+          return;
+        }
+
+        html += `<div class="table-wrapper"><table class="data-table">
+          <thead><tr><th>Personnel</th><th>Fonction</th><th>Mobilisation(s)</th></tr></thead><tbody>`;
+        lignes.forEach(({ s, roles }) => {
+          const badges = { salle: '', secr: ' <span class="badge badge-secr">Secrétariat</span>', reserve: ' <span class="badge badge-tt">Réserve</span>' };
+          html += `<tr>
+            <td><strong>${escHtml(s.nom)}</strong> ${escHtml(s.prenom)}</td>
+            <td>${escHtml(s.fonction || '')}</td>
+            <td>${roles.map(r => escHtml(r.detail) + badges[r.role]).join('<br>')}</td>
+          </tr>`;
+        });
+        html += '</tbody></table></div></div>';
+      });
+    });
+
+    zone.innerHTML = html;
+  },
+
   // ── Vue réserve : disponibles non affectés, par épreuve ──────
 
   _rendreReserve() {
@@ -259,9 +357,10 @@ const Recap = {
       return;
     }
 
-    let html = `<div class="alerte alerte-info" style="margin-bottom:14px">ℹ La réserve regroupe, pour chaque épreuve,
-      les surveillants <strong>disponibles mais non affectés</strong> : ce sont vos remplaçants immédiats en cas
-      d\u2019absence le jour J. Les personnels ayant atteint leur quota sont signalés.</div>`;
+    let html = `<div class="alerte alerte-info" style="margin-bottom:14px">ℹ Pour chaque épreuve :
+      la <strong>réserve affectée</strong> (personnels désignés, mobilisés au même titre que la surveillance —
+      déplaçables par glisser-déposer), puis le <strong>vivier restant</strong> des disponibles non mobilisés,
+      du moins chargé au plus chargé.</div>`;
 
     let jourCourant = '';
     AppData.epreuves.forEach(ep => {
@@ -271,8 +370,11 @@ const Recap = {
         html += `<h4 class="sous-titre" style="margin-top:18px">${escHtml(jour)}</h4>`;
       }
 
-      const reserve = AppData.surveillants
-        .filter(s => s.dispos[ep.id] && !AppData.estAffecteEpreuve(ep.id, s.id))
+      const nbRes = AppData.params.nbReserves || 0;
+      const enReserve = AppData.getReserve(ep.id);
+
+      const vivier = AppData.surveillants
+        .filter(s => s.dispos[ep.id] && !AppData.estMobiliseEpreuve(ep.id, s.id))
         .map(s => {
           const c = AppData.chargeSurveillant(s.id);
           return { s, c, quotaAtteint: !!(s.quotaMax && c.creneaux >= s.quotaMax) };
@@ -281,31 +383,40 @@ const Recap = {
           a.c.minutes - b.c.minutes ||
           (a.s.nom + a.s.prenom).localeCompare(b.s.nom + b.s.prenom, 'fr'));
 
-      const mobilisables = reserve.filter(r => !r.quotaAtteint).length;
-      const badge = !reserve.length
-        ? '<span class="badge badge-prio">Aucune réserve</span>'
-        : mobilisables === 0
-          ? '<span class="badge badge-warn">Réserve épuisée (quotas)</span>'
-          : `<span class="badge badge-secr">${mobilisables} mobilisable(s)</span>`;
+      const manque = nbRes - enReserve.length;
+      const badge = manque > 0
+        ? `<span class="badge badge-prio">${manque} poste(s) de réserve à pourvoir</span>`
+        : `<span class="badge badge-secr">${enReserve.length} en réserve</span>`;
+
+      const chipsReserve = enReserve.map(id => {
+        const s = AppData.getSurveillant(id);
+        if (!s) return '';
+        const c = AppData.chargeSurveillant(id);
+        const dnd = JSON.stringify({ ep: ep.id, reserve: true, surv: id });
+        return `<span class="surv-chip" draggable="true" data-dnd='${dnd}' title="Glisser pour déplacer ou échanger">
+          ${escHtml(s.nom)} ${escHtml(s.prenom)}
+          <span class="dispo-count">${c.creneaux} cr. · ${AppData.formatDuree(c.minutes)}</span></span>`;
+      }).filter(Boolean).join(' ');
 
       html += `<div class="jury-card">
         <div class="jury-card-header">
           <strong>${escHtml(ep.matiere)}</strong>
           <span class="jury-card-meta">${ep.heureDebut}–${AppData.heureFin(ep)} ${badge}</span>
         </div>
-        <div style="padding:12px 16px">`;
-
-      if (!reserve.length) {
-        html += `<span class="calc-attente">Tous les surveillants disponibles sont déjà affectés sur cette épreuve —
-          aucun remplaçant possible sans modifier les disponibilités.</span>`;
-      } else {
-        html += reserve.map(({ s, c, quotaAtteint }) =>
-          `<span class="surv-chip" ${quotaAtteint ? 'style="opacity:.5" title="Quota atteint"' : ''}>
-            ${escHtml(s.nom)} ${escHtml(s.prenom)}
-            <span class="dispo-count">${c.creneaux} cr. · ${AppData.formatDuree(c.minutes)}${quotaAtteint ? ' · quota atteint' : ''}</span>
-          </span>`).join(' ');
-      }
-      html += '</div></div>';
+        <div style="padding:12px 16px">
+          <div style="margin-bottom:8px"><strong>🛟 Réserve affectée</strong></div>
+          <div class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, reserve: true })}' style="min-height:34px">
+            ${chipsReserve || '<span class="calc-attente">Personne — lancez la répartition ou glissez un surveillant ici.</span>'}
+          </div>
+          <div style="margin:12px 0 8px"><strong>Vivier restant</strong> <span class="dispo-count">(disponibles non mobilisés)</span></div>
+          ${vivier.length
+            ? vivier.map(({ s, c, quotaAtteint }) =>
+              `<span class="surv-chip" ${quotaAtteint ? 'style="opacity:.5" title="Quota atteint"' : ''}>
+                ${escHtml(s.nom)} ${escHtml(s.prenom)}
+                <span class="dispo-count">${c.creneaux} cr. · ${AppData.formatDuree(c.minutes)}${quotaAtteint ? ' · quota atteint' : ''}</span>
+              </span>`).join(' ')
+            : '<span class="calc-attente">Aucun — tous les disponibles sont mobilisés sur cette épreuve.</span>'}
+        </div></div>`;
     });
 
     zone.innerHTML = html;

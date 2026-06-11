@@ -28,6 +28,7 @@ const AppData = {
     coefCopies    : 2,              // copies doubles par candidat
     coefBrouillons: 2,              // feuilles de brouillon par candidat
     margeMateriel : 10,             // % de marge sur les fournitures
+    nbReserves    : 2,              // surveillants de réserve souhaités par épreuve
   },
 
   epreuves     : [],
@@ -35,6 +36,7 @@ const AppData = {
   amenagements : [],
   surveillants : [],
   affectations : {},   // { [epreuveId]: { [salleId]: [survId, ...] } }
+  reserves     : {},   // { [epreuveId]: [survId, ...] } — personnels de réserve
 
   _nextId : { epreuve: 1, salle: 1, amenagement: 1, surveillant: 1 },
 
@@ -123,6 +125,7 @@ const AppData = {
     if (i === -1) return false;
     this.epreuves.splice(i, 1);
     delete this.affectations[id];                              // nettoyage créneaux fantômes
+    delete this.reserves[id];                                  // nettoyage réserve
     this.surveillants.forEach(s => delete s.dispos[id]);       // nettoyage dispos
     return true;
   },
@@ -305,6 +308,9 @@ const AppData = {
       Object.keys(parEp).forEach(sid => {
         parEp[sid] = parEp[sid].filter(x => x !== id);
       }));
+    Object.keys(this.reserves).forEach(epId => {
+      this.reserves[epId] = this.reserves[epId].filter(x => x !== id);
+    });
     return true;
   },
 
@@ -361,12 +367,33 @@ const AppData = {
     return Object.values(parEp).some(liste => liste.includes(survId));
   },
 
+  // ── Réserve par épreuve ──────────────────────────────────────
+
+  getReserve(epId)        { return this.reserves[epId] || []; },
+  estEnReserve(epId, survId) { return this.getReserve(epId).includes(survId); },
+
+  /** Mobilisé = affecté en salle OU placé en réserve sur l'épreuve */
+  estMobiliseEpreuve(epId, survId) {
+    return this.estAffecteEpreuve(epId, survId) || this.estEnReserve(epId, survId);
+  },
+
+  mettreEnReserve(epId, survId) {
+    if (!this.reserves[epId]) this.reserves[epId] = [];
+    if (!this.reserves[epId].includes(survId)) this.reserves[epId].push(survId);
+  },
+
+  retirerReserve(epId, survId) {
+    const l = this.reserves[epId] || [];
+    const i = l.indexOf(survId);
+    if (i !== -1) l.splice(i, 1);
+  },
+
   /** Durée de surveillance d'un créneau (salle aménagée = tiers temps) */
   dureeCreneau(ep, salle) {
     return salle.type === 'amenagee' ? this.dureeTiersTemps(ep.duree) : ep.duree;
   },
 
-  /** Charge cumulée d'un surveillant : { creneaux, minutes } */
+  /** Charge cumulée d'un surveillant : { creneaux, minutes } — réserve incluse */
   chargeSurveillant(survId) {
     let creneaux = 0, minutes = 0;
     this.epreuves.forEach(ep => {
@@ -378,6 +405,10 @@ const AppData = {
           minutes += salle ? this.dureeCreneau(ep, salle) : ep.duree;
         }
       });
+      if (this.estEnReserve(ep.id, survId)) {   // la réserve mobilise au même titre
+        creneaux++;
+        minutes += ep.duree;
+      }
     });
     return { creneaux, minutes };
   },
@@ -396,6 +427,7 @@ const AppData = {
       amenagements: this.amenagements,
       surveillants: this.surveillants,
       affectations: this.affectations,
+      reserves: this.reserves,
       _nextId: this._nextId,
     };
   },
@@ -408,6 +440,7 @@ const AppData = {
     this.amenagements = obj.amenagements || [];
     this.surveillants = obj.surveillants || [];
     this.affectations = obj.affectations || {};
+    this.reserves = obj.reserves || {};
     this._nextId = { ...this._nextId, ...(obj._nextId || {}) };
     this._sortEpreuves();
     this._sortSurveillants();

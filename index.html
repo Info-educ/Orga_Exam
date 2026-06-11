@@ -168,11 +168,15 @@
               <label class="checkbox-label" style="align-self:center">
                 <input type="checkbox" id="opt-conserver"> Conserver les affectations existantes
               </label>
+              <label class="checkbox-label" style="align-self:center" title="Surveillants de réserve à prévoir pour chaque épreuve">
+                🛟 Réserve / épreuve <input type="number" id="opt-nb-reserves" min="0" max="20" value="2" style="width:58px;margin-left:6px">
+              </label>
               <button class="btn btn-accent" id="btn-lancer-repartition">⚡ Lancer la répartition</button>
               <button class="btn btn-outline" id="btn-vider-repartition">🗑 Tout effacer</button>
             </div>
           </div>
           <div class="stats-bar" id="stats-repartition"></div>
+          <div id="zone-secretariat"></div>
           <div class="repartition-zone" id="zone-repartition"></div>
           <div id="zone-equite"></div>
         </section>
@@ -193,6 +197,7 @@
             <button class="vue-btn active" data-vue="epreuves">📅 Par épreuve</button>
             <button class="vue-btn" data-vue="salles">🚪 Par salle</button>
             <button class="vue-btn" data-vue="surveillants">⏱ Heures par surveillant</button>
+            <button class="vue-btn" data-vue="demijournees">🌓 Par demi-journée</button>
             <button class="vue-btn" data-vue="reserve">🛟 Réserve</button>
           </div>
           <div id="recap-planning"></div>
