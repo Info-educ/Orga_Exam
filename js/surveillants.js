@@ -168,11 +168,15 @@ const Surveillants = {
   },
 
   _majBadgeLigne(survId) {
-    // Rafraîchissement complet léger : recalcul des compteurs sans tout reconstruire
+    // Mise à jour ciblée du compteur de la ligne — sans re-rendu (le défilement est préservé)
     const s = AppData.getSurveillant(parseInt(survId, 10));
     if (!s) return;
-    // simplification : re-rendu complet (volumes faibles, < 200 lignes)
-    this.rendre();
+    const cb = document.querySelector(`#zone-dispos input[data-surv="${survId}"]`);
+    const badge = cb && cb.closest('tr') ? cb.closest('tr').querySelector('.badge') : null;
+    if (!badge) return;
+    const nb = AppData.epreuves.filter(ep => s.dispos[ep.id]).length;
+    badge.textContent = `${nb}/${AppData.epreuves.length}`;
+    badge.className = `badge ${nb ? 'badge-duo' : 'badge-prio'}`;
   },
 
   _tableSimple(liste) {

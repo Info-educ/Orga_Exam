@@ -49,14 +49,19 @@ const Repartition = {
     }
     const conserver = $('#opt-conserver').checked;
     if (!conserver) {
-      // On préserve TOUJOURS le secrétariat (affecté à la main) et on vide le reste.
+      // On préserve TOUJOURS le secrétariat (affecté à la main) et les affectations
+      // VERROUILLÉES (📌) ; tout le reste est vidé avant la nouvelle passe.
       const secrIds = AppData.salles.filter(s => s.type === 'secretariat').map(s => s.id);
       Object.keys(AppData.affectations).forEach(epId => {
         Object.keys(AppData.affectations[epId]).forEach(sid => {
-          if (!secrIds.includes(parseInt(sid, 10))) delete AppData.affectations[epId][sid];
+          if (secrIds.includes(parseInt(sid, 10))) return;
+          AppData.affectations[epId][sid] =
+            AppData.affectations[epId][sid].filter(survId => AppData.estVerrouille(epId, sid, survId));
         });
       });
-      AppData.reserves = {};
+      Object.keys(AppData.reserves).forEach(epId => {
+        AppData.reserves[epId] = AppData.reserves[epId].filter(survId => AppData.estVerrouille(epId, null, survId));
+      });
     }
 
     // Charge simulée pendant la passe (inclut secrétariat et réserve déjà en place)
@@ -119,17 +124,18 @@ const Repartition = {
     Unsaved.marquer();
     this.rendre();
     if (manquants)
-      notifier(`Répartition terminée : ${pourvus} poste(s) pourvu(s), <strong>${manquants} poste(s) non pourvu(s)</strong> (disponibilités ou quotas insuffisants). Le secrétariat affecté à la main a été préservé.`, 'warning', 9000);
+      notifier(`Répartition terminée : ${pourvus} poste(s) pourvu(s), <strong>${manquants} poste(s) non pourvu(s)</strong> (disponibilités ou quotas insuffisants). Le secrétariat et les affectations figées 📌 ont été préservés.`, 'warning', 9000);
     else
-      notifier(`Répartition terminée : ${pourvus} poste(s) pourvu(s) — surveillance et réserve équilibrées. Le secrétariat affecté à la main a été préservé.`);
+      notifier(`Répartition terminée : ${pourvus} poste(s) pourvu(s) — surveillance et réserve équilibrées. Le secrétariat et les affectations figées 📌 ont été préservés.`);
   },
 
   vider() {
     AppData.affectations = {};
     AppData.reserves = {};
+    AppData.verrous = {};
     Unsaved.marquer();
     this.rendre();
-    notifier('Toutes les affectations ont été effacées (secrétariat compris).', 'info');
+    notifier('Toutes les affectations ont été effacées (secrétariat et verrous compris).', 'info');
   },
 
   // ────────────────────────────────────────────────────────────
@@ -282,15 +288,19 @@ const Repartition = {
   // ── Briques communes (chips draggables, selects, badges) ─────
 
   _chips(ep, salleId, listeIds) {
+    const enReserve = salleId === null || salleId === undefined;
     const ids = listeIds || AppData.getAffectes(ep.id, salleId);
     return ids.map(id => {
       const s = AppData.getSurveillant(id);
       if (!s) return '';
-      const dnd = JSON.stringify(salleId !== null && salleId !== undefined
-        ? { ep: ep.id, salle: salleId, surv: id }
-        : { ep: ep.id, reserve: true, surv: id });
-      return `<span class="surv-chip" draggable="true" data-dnd='${dnd}' title="Glisser pour déplacer ou échanger">
-        ${escHtml(s.nom)} ${escHtml(s.prenom)}
+      const verrou = AppData.estVerrouille(ep.id, enReserve ? null : salleId, id);
+      const dnd = JSON.stringify(enReserve
+        ? { ep: ep.id, reserve: true, surv: id }
+        : { ep: ep.id, salle: salleId, surv: id });
+      return `<span class="surv-chip ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}"
+        ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée — l\u2019algorithme la préserve' : 'Glisser pour déplacer ou échanger'}">
+        ${verrou ? '📌 ' : ''}${escHtml(s.nom)} ${escHtml(s.prenom)}
+        <button class="chip-lock" data-lock='${dnd}' title="${verrou ? 'Libérer cette affectation' : 'Figer : préservée si vous relancez la répartition'}">${verrou ? '🔓' : '📌'}</button>
         <button data-remove='${dnd}' title="Retirer">✕</button></span>`;
     }).join('') || '<span class="calc-attente">Personne</span>';
   },
@@ -312,6 +322,18 @@ const Repartition = {
   },
 
   _brancherActions(zone) {
+    zone.querySelectorAll('[data-lock]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const d = JSON.parse(btn.dataset.lock);
+        const fige = AppData.basculerVerrou(d.ep, d.reserve ? null : d.salle, d.surv);
+        Unsaved.marquer();
+        DnD.toutRafraichir();
+        const s = AppData.getSurveillant(d.surv);
+        notifier(fige
+          ? `📌 ${escHtml(s ? s.nom + ' ' + s.prenom : '')} : affectation figée — préservée lors des prochaines répartitions.`
+          : `🔓 ${escHtml(s ? s.nom + ' ' + s.prenom : '')} : affectation libérée.`, 'info');
+      }));
+
     zone.querySelectorAll('[data-remove]').forEach(btn =>
       btn.addEventListener('click', () => {
         const d = JSON.parse(btn.dataset.remove);

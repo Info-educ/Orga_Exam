@@ -2762,3 +2762,23 @@ div.modal-wide { max-width: 780px; }
   background: #fffbeb;
   border-top: 2px dashed #fcd34d;
 }
+
+/* --- Affectations figées (verrous) --- */
+.surv-chip.locked {
+  background: #fef3c7;
+  border-color: var(--amber-400);
+  cursor: default;
+}
+.surv-chip .chip-lock {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 2px;
+  border-radius: 50%;
+  opacity: 0.45;
+  transition: opacity 0.12s;
+}
+.surv-chip:hover .chip-lock { opacity: 1; }
+.surv-chip.locked .chip-lock { opacity: 0.8; }

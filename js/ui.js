@@ -52,6 +52,30 @@ window.ouvrirModal = ouvrirModal;
 window.fermerModal = fermerModal;
 
 // ════════════════════════════════════════════════════════════════
+// PRÉSERVATION DU DÉFILEMENT
+// Tout re-rendu (innerHTML) détruit le DOM et peut faire remonter
+// la page. Ce helper mémorise la position de la fenêtre et de tous
+// les conteneurs défilants, exécute le rendu, puis les restaure.
+// ════════════════════════════════════════════════════════════════
+
+function preserverScroll(fn) {
+  const fen = { x: window.scrollX, y: window.scrollY };
+  const conteneurs = $$('.dispo-wrapper, .table-wrapper, .app-main')
+    .map((el, i) => ({ i, top: el.scrollTop, left: el.scrollLeft }))
+    .filter(c => c.top || c.left);
+
+  const r = fn();
+
+  window.scrollTo(fen.x, fen.y);
+  const apres = $$('.dispo-wrapper, .table-wrapper, .app-main');
+  conteneurs.forEach(c => {
+    if (apres[c.i]) { apres[c.i].scrollTop = c.top; apres[c.i].scrollLeft = c.left; }
+  });
+  return r;
+}
+window.preserverScroll = preserverScroll;
+
+// ════════════════════════════════════════════════════════════════
 // ÉTAT NON SAUVEGARDÉ
 // ════════════════════════════════════════════════════════════════
 

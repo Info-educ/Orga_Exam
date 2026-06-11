@@ -37,6 +37,7 @@ const AppData = {
   surveillants : [],
   affectations : {},   // { [epreuveId]: { [salleId]: [survId, ...] } }
   reserves     : {},   // { [epreuveId]: [survId, ...] } — personnels de réserve
+  verrous      : {},   // { "epId:salleId|R:survId": true } — affectations figées (préservées par l'algorithme)
 
   _nextId : { epreuve: 1, salle: 1, amenagement: 1, surveillant: 1 },
 
@@ -126,6 +127,7 @@ const AppData = {
     this.epreuves.splice(i, 1);
     delete this.affectations[id];                              // nettoyage créneaux fantômes
     delete this.reserves[id];                                  // nettoyage réserve
+    this._purgerVerrous(([ep]) => ep === String(id));          // nettoyage verrous
     this.surveillants.forEach(s => delete s.dispos[id]);       // nettoyage dispos
     return true;
   },
@@ -183,6 +185,7 @@ const AppData = {
     this.salles.splice(i, 1);
     Object.values(this.affectations).forEach(parEp => delete parEp[id]);
     this.amenagements.forEach(a => { if (a.salleId === id) a.salleId = null; });
+    this._purgerVerrous(([, sa]) => sa === String(id));
     return true;
   },
 
@@ -313,6 +316,7 @@ const AppData = {
     Object.keys(this.reserves).forEach(epId => {
       this.reserves[epId] = this.reserves[epId].filter(x => x !== id);
     });
+    this._purgerVerrous(([, , sv]) => sv === String(id));
     return true;
   },
 
@@ -361,6 +365,32 @@ const AppData = {
     const liste = this.getAffectes(epId, salleId);
     const i = liste.indexOf(survId);
     if (i !== -1) liste.splice(i, 1);
+    this.retirerVerrou(epId, salleId, survId);   // une affectation retirée perd son verrou
+  },
+
+  // ── Verrous (affectations figées) ────────────────────────────
+
+  _cleVerrou(epId, salleId, survId) {
+    return `${epId}:${salleId === null || salleId === undefined ? 'R' : salleId}:${survId}`;
+  },
+
+  estVerrouille(epId, salleId, survId) {
+    return !!this.verrous[this._cleVerrou(epId, salleId, survId)];
+  },
+
+  basculerVerrou(epId, salleId, survId) {
+    const cle = this._cleVerrou(epId, salleId, survId);
+    if (this.verrous[cle]) delete this.verrous[cle];
+    else this.verrous[cle] = true;
+    return !!this.verrous[cle];
+  },
+
+  retirerVerrou(epId, salleId, survId) {
+    delete this.verrous[this._cleVerrou(epId, salleId, survId)];
+  },
+
+  _purgerVerrous(test) {
+    Object.keys(this.verrous).forEach(cle => { if (test(cle.split(':'))) delete this.verrous[cle]; });
   },
 
   /** Surveillant déjà mobilisé sur cette épreuve (toutes salles) ? */
@@ -388,6 +418,7 @@ const AppData = {
     const l = this.reserves[epId] || [];
     const i = l.indexOf(survId);
     if (i !== -1) l.splice(i, 1);
+    this.retirerVerrou(epId, null, survId);
   },
 
   /** Salle dont l'équipe reste jusqu'à la fin du tiers temps :
@@ -441,6 +472,7 @@ const AppData = {
       surveillants: this.surveillants,
       affectations: this.affectations,
       reserves: this.reserves,
+      verrous: this.verrous,
       _nextId: this._nextId,
     };
   },
@@ -454,6 +486,7 @@ const AppData = {
     this.surveillants = obj.surveillants || [];
     this.affectations = obj.affectations || {};
     this.reserves = obj.reserves || {};
+    this.verrous = obj.verrous || {};
     this._nextId = { ...this._nextId, ...(obj._nextId || {}) };
     this._sortEpreuves();
     this._sortSurveillants();

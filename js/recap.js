@@ -125,8 +125,9 @@ const Recap = {
         const chips = AppData.getAffectes(ep.id, salle.id).map(id => {
           const s = AppData.getSurveillant(id);
           if (!s) return '';
+          const verrou = AppData.estVerrouille(ep.id, salle.id, id);
           const dnd = JSON.stringify({ ep: ep.id, salle: salle.id, surv: id });
-          return `<span class="surv-chip" draggable="true" data-dnd='${dnd}' title="Glisser pour déplacer ou échanger">${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
+          return `<span class="surv-chip ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">${verrou ? '📌 ' : ''}${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
         }).filter(Boolean).join(' ') || '<span class="badge badge-prio">Non pourvu</span>';
         html += `<tr>
           ${i === 0 ? `<td rowspan="${span}">${escHtml(AppData.formatDateCourt(ep.date))}</td>
@@ -141,8 +142,9 @@ const Recap = {
         const resChips = AppData.getReserve(ep.id).map(id => {
           const s = AppData.getSurveillant(id);
           if (!s) return '';
+          const verrou = AppData.estVerrouille(ep.id, null, id);
           const dnd = JSON.stringify({ ep: ep.id, reserve: true, surv: id });
-          return `<span class="surv-chip" draggable="true" data-dnd='${dnd}' title="Glisser pour déplacer ou échanger">${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
+          return `<span class="surv-chip ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">${verrou ? '📌 ' : ''}${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
         }).filter(Boolean).join(' ');
         html += `<tr class="row-reserve">
           <td>${ep.heureDebut}–${AppData.heureFin(ep)}</td>
@@ -399,9 +401,10 @@ const Recap = {
         const s = AppData.getSurveillant(id);
         if (!s) return '';
         const c = AppData.chargeSurveillant(id);
+        const verrou = AppData.estVerrouille(ep.id, null, id);
         const dnd = JSON.stringify({ ep: ep.id, reserve: true, surv: id });
-        return `<span class="surv-chip" draggable="true" data-dnd='${dnd}' title="Glisser pour déplacer ou échanger">
-          ${escHtml(s.nom)} ${escHtml(s.prenom)}
+        return `<span class="surv-chip ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">
+          ${verrou ? '📌 ' : ''}${escHtml(s.nom)} ${escHtml(s.prenom)}
           <span class="dispo-count">${c.creneaux} cr. · ${AppData.formatDuree(c.minutes)}</span></span>`;
       }).filter(Boolean).join(' ');
 
@@ -491,8 +494,9 @@ const Recap = {
         const chips = affectes.map(id => {
           const s = AppData.getSurveillant(id);
           if (!s) return '';
+          const verrou = AppData.estVerrouille(ep.id, salle.id, id);
           const dnd = JSON.stringify({ ep: ep.id, salle: salle.id, surv: id });
-          return `<span class="surv-chip" draggable="true" data-dnd='${dnd}' title="Glisser pour déplacer ou échanger">${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
+          return `<span class="surv-chip ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">${verrou ? '📌 ' : ''}${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
         }).filter(Boolean).join(' ');
 
         html += `<div class="jury-card">
