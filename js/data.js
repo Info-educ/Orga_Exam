@@ -459,6 +459,21 @@ const AppData = {
     return map;
   },
 
+  // ── Rôles et éligibilité par type de poste ───────────────────
+  //   Salles & réserves : ENSEIGNANTS d'abord, CPE seulement si besoin.
+  //   Couloirs : AED ou personnel administratif uniquement.
+
+  _fonction(s) { return (s.fonction || '').toLowerCase(); },
+
+  estEnseignant(s) { const f = this._fonction(s); return f.includes('prof') || f.includes('enseign'); },
+  estCPE(s)        { return this._fonction(s).includes('cpe'); },
+
+  eligibleSalle(s)   { return this.estEnseignant(s) || this.estCPE(s); },
+  eligibleCouloir(s) {
+    const f = this._fonction(s);
+    return f.includes('aed') || f.includes('admin') || f.includes('assistant d');
+  },
+
   // ── Couloirs ─────────────────────────────────────────────────
 
   addCouloir(f) {

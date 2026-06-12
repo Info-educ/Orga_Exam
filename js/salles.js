@@ -212,21 +212,21 @@ const Salles = {
     const zone = $('#zone-couloirs');
     if (!zone) return;
 
-    let html = `<div class="table-wrapper"><table class="data-table" style="max-width:680px">
-      <thead><tr><th>Couloir</th><th class="text-center" style="width:160px">Surveillants / créneau</th><th style="width:90px"></th></tr></thead><tbody>`;
+    let html = `<div class="table-wrapper couloirs-wrapper"><table class="data-table couloirs-table">
+      <thead><tr><th>Couloir</th><th class="text-center" style="width:190px">Surveillants / créneau</th><th class="text-center" style="width:70px">Actions</th></tr></thead><tbody>`;
     if (!AppData.couloirs.length)
-      html += '<tr><td colspan="3" class="table-empty">Aucun couloir défini.</td></tr>';
+      html += '<tr><td colspan="3" class="table-empty">Aucun couloir défini — ajoutez-en un ci-dessous.</td></tr>';
     AppData.couloirs.forEach(c => {
       html += `<tr>
         <td><strong>🚶 ${escHtml(c.nom)}</strong></td>
-        <td class="text-center"><input type="number" min="1" max="10" value="${c.nbSurveillants}" data-couloir-nb="${c.id}" style="width:64px"></td>
-        <td><button class="btn btn-outline btn-icon" data-couloir-del="${c.id}" title="Supprimer">🗑</button></td>
+        <td class="text-center"><input type="number" class="input-mini" min="1" max="10" value="${c.nbSurveillants}" data-couloir-nb="${c.id}"></td>
+        <td class="text-center"><button class="btn btn-outline btn-icon btn-danger-soft" data-couloir-del="${c.id}" title="Supprimer ce couloir">🗑</button></td>
       </tr>`;
     });
-    html += `<tr>
-      <td><input type="text" id="couloir-nom" placeholder="ex. Couloir bâtiment A — 1er étage" style="width:100%"></td>
-      <td class="text-center"><input type="number" id="couloir-nb" min="1" max="10" value="1" style="width:64px"></td>
-      <td><button class="btn btn-accent btn-icon" id="couloir-add" title="Ajouter">+</button></td>
+    html += `<tr class="couloir-add-row">
+      <td><input type="text" id="couloir-nom" class="input-ligne" placeholder="Nom du couloir — ex. Bâtiment A, 1er étage"></td>
+      <td class="text-center"><input type="number" id="couloir-nb" class="input-mini" min="1" max="10" value="1"></td>
+      <td class="text-center"><button class="btn btn-accent btn-icon" id="couloir-add" title="Ajouter le couloir">＋</button></td>
     </tr></tbody></table></div>`;
     zone.innerHTML = html;
 

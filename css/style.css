@@ -2809,3 +2809,51 @@ div.modal-wide { max-width: 780px; }
   background: #f0f9ff;
   border-top: 1px dashed #7dd3fc;
 }
+
+/* --- Panneau couloirs : carte ajustée et champs soignés --- */
+.couloirs-wrapper {
+  max-width: 720px;             /* la carte épouse la table, plus de vide à droite */
+}
+.couloirs-table input.input-mini {
+  width: 70px;
+  padding: 6px 8px;
+  text-align: center;
+  border: 1px solid var(--border, #d8dee9);
+  border-radius: 8px;
+  font: inherit;
+  background: #fff;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.couloirs-table input.input-ligne {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border, #d8dee9);
+  border-radius: 8px;
+  font: inherit;
+  background: #fff;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.couloirs-table input:focus {
+  outline: none;
+  border-color: var(--blue-800);
+  box-shadow: 0 0 0 3px rgba(22, 53, 102, 0.12);
+}
+.couloirs-table .couloir-add-row td {
+  background: #f8fafc;
+  border-top: 2px solid var(--border, #d8dee9);
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.couloirs-table .btn-icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.btn-danger-soft:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}

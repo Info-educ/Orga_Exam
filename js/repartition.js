@@ -104,11 +104,19 @@ const Repartition = {
     const ratio = (s) => charge[s.id].minutes / poids(s);
     const alea = {};   // ordre aléatoire propre à cette passe
     AppData.surveillants.forEach(s => { alea[s.id] = Math.random(); });
+    /**
+     * Salles & réserves : réservées aux ENSEIGNANTS ; les CPE ne sont
+     * sollicités que s'il ne reste aucun enseignant disponible.
+     * AED, AESH et administratifs ne sont jamais affectés en salle.
+     */
     const choisir = (ep) => {
-      const candidats = AppData.surveillants.filter(s =>
+      const base = AppData.surveillants.filter(s =>
         s.dispos[ep.id] &&
+        AppData.eligibleSalle(s) &&
         !AppData.estMobiliseEpreuve(ep.id, s.id) &&
         (!s.quotaMax || charge[s.id].creneaux < s.quotaMax));
+      let candidats = base.filter(s => AppData.estEnseignant(s));
+      if (!candidats.length) candidats = base;   // CPE en renfort
       if (!candidats.length) return null;
       candidats.sort((a, b) =>
         ratio(a) - ratio(b) ||
@@ -138,6 +146,7 @@ const Repartition = {
       const choisirCouloir = (slot) => {
         const candidats = AppData.surveillants.filter(s =>
           s.dispos[ep.id] &&
+          AppData.eligibleCouloir(s) &&     // AED / administratifs uniquement
           !AppData.estAffecteEpreuve(ep.id, s.id) &&
           !AppData.estEnReserve(ep.id, s.id) &&
           !AppData.estEnReserveTT(ep.id, s.id) &&
@@ -470,10 +479,16 @@ const Repartition = {
     const disponibles = AppData.surveillants.filter(s => {
       if (!s.dispos[ep.id]) return false;
       if (cible.couloir !== undefined)
-        return !AppData.estAffecteEpreuve(ep.id, s.id) && !AppData.estEnReserve(ep.id, s.id)
+        return AppData.eligibleCouloir(s)
+          && !AppData.estAffecteEpreuve(ep.id, s.id) && !AppData.estEnReserve(ep.id, s.id)
           && !AppData.estEnReserveTT(ep.id, s.id) && !AppData.creneauCouloirOccupe(ep.id, cible.slot, s.id);
-      return !AppData.estMobiliseEpreuve(ep.id, s.id);
-    });
+      // Salles & réserves : enseignants puis CPE (le secrétariat reste libre de tout rôle)
+      if (cible.salle !== undefined) {
+        const salle = AppData.getSalle(cible.salle);
+        if (salle && salle.type === 'secretariat') return !AppData.estMobiliseEpreuve(ep.id, s.id);
+      }
+      return AppData.eligibleSalle(s) && !AppData.estMobiliseEpreuve(ep.id, s.id);
+    }).sort((a, b) => (AppData.estEnseignant(b) - AppData.estEnseignant(a)) || (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr'));
     const options = disponibles.length
       ? '<option value="">+ Affecter…</option>' + disponibles.map(s => {
           const c = AppData.chargeSurveillant(s.id);
