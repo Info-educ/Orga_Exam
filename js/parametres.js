@@ -33,6 +33,7 @@ const Parametres = {
     $('#param-coef-copies').value = p.coefCopies;
     $('#param-coef-brouillons').value = p.coefBrouillons;
     $('#param-marge').value = p.margeMateriel;
+    $('#param-marge-secr').value = p.margeSecr !== undefined ? p.margeSecr : 10;
     this._toggleAutre();
     ouvrirModal('modal-params');
   },
@@ -52,6 +53,7 @@ const Parametres = {
     p.coefCopies     = parseFloat($('#param-coef-copies').value) || 2;
     p.coefBrouillons = parseFloat($('#param-coef-brouillons').value) || 2;
     p.margeMateriel  = parseFloat($('#param-marge').value) || 0;
+    p.margeSecr      = Math.max(0, parseInt($('#param-marge-secr').value, 10) || 0);
     fermerModal('modal-params');
     Unsaved.marquer();
     UI.rafraichirTout();

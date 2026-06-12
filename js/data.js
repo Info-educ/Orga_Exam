@@ -30,6 +30,7 @@ const AppData = {
     margeMateriel : 10,             // % de marge sur les fournitures
     nbReserves    : 2,              // surveillants de réserve souhaités par épreuve
     nbReservesTT  : 1,              // réserve tiers temps : présente jusqu'à la fin du TT
+    margeSecr     : 10,             // min ajoutées après la fin du TT pour le secrétariat (retour copies, vérifications)
   },
 
   epreuves     : [],
@@ -526,14 +527,23 @@ const AppData = {
     return !!salle && (salle.type === 'amenagee' || salle.type === 'secretariat');
   },
 
-  /** Heure de fin effective pour l'équipe d'une salle */
+  /** Heure de fin effective pour l'équipe d'une salle.
+   *  Secrétariat : fin du tiers temps + marge (retour des copies, vérifications). */
   heureFinSalle(ep, salle) {
-    return this.estHoraireTT(salle) ? this.heureFinTT(ep) : this.heureFin(ep);
+    if (!salle) return this.heureFin(ep);
+    if (salle.type === 'secretariat')
+      return this.addMinutes(this.heureFinTT(ep), this.params.margeSecr || 0);
+    if (salle.type === 'amenagee') return this.heureFinTT(ep);
+    return this.heureFin(ep);
   },
 
-  /** Durée de présence d'un créneau (aménagée et secrétariat = tiers temps) */
+  /** Durée de présence d'un créneau (aménagée = TT ; secrétariat = TT + marge) */
   dureeCreneau(ep, salle) {
-    return this.estHoraireTT(salle) ? this.dureeTiersTemps(ep.duree) : ep.duree;
+    if (!salle) return ep.duree;
+    if (salle.type === 'secretariat')
+      return this.dureeTiersTemps(ep.duree) + (this.params.margeSecr || 0);
+    if (salle.type === 'amenagee') return this.dureeTiersTemps(ep.duree);
+    return ep.duree;
   },
 
   /** Charge cumulée d'un surveillant : { creneaux, minutes } — réserve incluse */

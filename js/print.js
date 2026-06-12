@@ -456,7 +456,8 @@ const Impressions = {
         <ul>
           <li>Présence en salle <strong>${c.minutesAvantSecr} minutes avant</strong> le début de l\u2019épreuve :
             préparation des postes (ordinateurs, sujets adaptés, copies, brouillons) et accueil des candidats.</li>
-          <li>Présence requise <strong>jusqu\u2019à la fin du tiers temps</strong> — les candidats accompagnés composent en temps majoré.</li>
+          <li>Présence requise jusqu\u2019à <strong>${AppData.params.margeSecr || 0} minutes après la fin du tiers temps</strong> :
+            retour des copies au secrétariat, vérification des émargements et du matériel avant de quitter la salle.</li>
           <li>Secrétaire lecteur : lecture strictement <em>littérale</em> des sujets, sans reformulation ni explication.
             Secrétaire scripteur : écrire <em>sous la dictée exclusive</em> du candidat, orthographe d\u2019usage assurée.</li>
           <li>Confidentialité absolue sur les aménagements et la situation des candidats (RGPD).</li>
@@ -479,7 +480,7 @@ const Impressions = {
         <td>${escHtml(salle.nom)}</td>
         <td><strong>${AppData.addMinutes(ep.heureDebut, -c.minutesAvantSecr)}</strong><br><small>(${c.minutesAvantSecr} min avant)</small></td>
         <td>${ep.heureDebut}</td>
-        <td><strong>${AppData.heureFinSalle(ep, salle)}</strong><br><span class="badge badge-tt">fin du tiers temps</span></td>
+        <td><strong>${AppData.heureFinSalle(ep, salle)}</strong><br><span class="badge badge-tt">fin TT${AppData.params.margeSecr ? ' + ' + AppData.params.margeSecr + ' min' : ''}</span></td>
         <td>${AppData.formatDuree(AppData.dureeCreneau(ep, salle))}</td>
         <td>${noms}</td>
         <td>${candidats}</td>
@@ -515,9 +516,9 @@ const Impressions = {
           <div class="bloc bloc-bleu">${escHtml(sv.fonction || '')} —
             <strong>${crs.length} créneau(x), ${AppData.formatDuree(totalMin)}</strong> au total.
             Présence requise <strong>${c.minutesAvantSecr} minutes avant</strong> chaque épreuve,
-            <strong>jusqu\u2019à la fin du tiers temps</strong>.</div>
+            et jusqu\u2019à <strong>${AppData.params.margeSecr || 0} min après la fin du tiers temps</strong> (vérifications).</div>
           <table>
-            <tr><th>Date</th><th>Épreuve</th><th>Salle</th><th>Présence en salle</th><th>Début de l\u2019épreuve</th><th>Fin (tiers temps)</th><th>Durée</th></tr>
+            <tr><th>Date</th><th>Épreuve</th><th>Salle</th><th>Présence en salle</th><th>Début de l\u2019épreuve</th><th>Fin de présence</th><th>Durée</th></tr>
             ${crs.sort((x, y) => (x.ep.date + x.ep.heureDebut).localeCompare(y.ep.date + y.ep.heureDebut)).map(({ ep, salle }) => `<tr>
               <td>${escHtml(AppData.formatDate(ep.date))}</td>
               <td><strong>${escHtml(ep.matiere)}</strong></td>
@@ -584,7 +585,7 @@ const Impressions = {
       if (missionsEp.length) {
         corps += `<h2>Missions sur épreuve entière (plusieurs candidats)</h2>
           <table>
-            <tr><th>Date</th><th>Épreuve</th><th>Début</th><th>Fin (tiers temps)</th><th>Durée</th></tr>
+            <tr><th>Date</th><th>Épreuve</th><th>Début</th><th>Fin de présence</th><th>Durée</th></tr>
             ${missionsEp.map(c => `<tr>
               <td>${escHtml(AppData.formatDateCourt(c.ep.date))}</td>
               <td><strong>${escHtml(c.ep.matiere)}</strong></td>

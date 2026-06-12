@@ -559,7 +559,7 @@ const Recap = {
           <div class="jury-card-header">
             <strong>${escHtml(ep.matiere)} — ${escHtml(salle.nom)}</strong>
             <span class="jury-card-meta">${escHtml(AppData.formatDateCourt(ep.date))} ·
-              ${ep.heureDebut}–${AppData.heureFinSalle(ep, salle)} <span class="badge badge-tt">fin TT</span>
+              ${ep.heureDebut}–${AppData.heureFinSalle(ep, salle)} <span class="badge badge-tt">fin TT${AppData.params.margeSecr ? ' + ' + AppData.params.margeSecr + ' min' : ''}</span>
               ${manque > 0 ? `<span class="badge badge-prio">${manque} manquant(s)</span>` : `<span class="badge badge-secr">${affectes.length}/${salle.nbSurveillants}</span>`}</span>
           </div>
           <div style="padding:12px 16px">
