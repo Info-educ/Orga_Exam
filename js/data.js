@@ -551,14 +551,21 @@ const AppData = {
     return Object.values(parEp).some(parC => (parC[debut] || []).includes(survId));
   },
 
-  /** Liste { couloir, debut, fin, duree } d'un surveillant sur une épreuve */
+  /** Liste { couloir, debut, fin, duree } d'un surveillant sur une épreuve.
+   *  Lit les AFFECTATIONS STOCKÉES (et non les créneaux recalculés) afin de
+   *  rester exact même si le délai de convocation a changé entre-temps. */
   creneauxCouloirDe(ep, survId) {
     const res = [];
     const parEp = this.affectationsCouloir[ep.id] || {};
-    this.creneauxCouloir(ep).forEach(slot => {
-      this.couloirs.forEach(co => {
-        if (((parEp[co.id] || {})[slot.debut] || []).includes(survId))
-          res.push({ couloir: co, ...slot });
+    const finEp = this.heureFin(ep);
+    this.couloirs.forEach(co => {
+      Object.keys(parEp[co.id] || {}).sort().forEach(debut => {
+        if (!parEp[co.id][debut].includes(survId)) return;
+        const finBrut = this.addMinutes(debut, 60);
+        const fin = finBrut < finEp ? finBrut : finEp;
+        const [h1, m1] = debut.split(':').map(Number);
+        const [h2, m2] = fin.split(':').map(Number);
+        res.push({ couloir: co, debut, fin, duree: Math.max(0, (h2 * 60 + m2) - (h1 * 60 + m1)) });
       });
     });
     return res;
@@ -759,7 +766,7 @@ const AppData = {
     // Feuille Surveillants : 1 colonne par épreuve définie
     const colsDispos = this.epreuves.map(ep => this._colDispo(ep));
     const entetes = ['NOM', 'Prénom', 'Fonction', 'Heures hebdo', ...colsDispos];
-    const exemple = ['DUPONT', 'Marie', 'Professeur', 18, ...colsDispos.map(() => 'O')];
+    const exemple = ['DUPONT', 'Marie', 'Professeur(e)', 18, ...colsDispos.map(() => 'O')];
     const wsS = XLSX.utils.aoa_to_sheet([entetes, exemple]);
     XLSX.utils.book_append_sheet(wb, wsS, 'Surveillants');
 

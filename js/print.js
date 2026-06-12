@@ -31,6 +31,14 @@ const PrintConfig = {
       signatureBase64 : d.signatureBase64 || null,
       minutesAvant : d.minutesAvant !== undefined ? d.minutesAvant : 15,
       minutesAvantSecr : d.minutesAvantSecr !== undefined ? d.minutesAvantSecr : 30,
+      consignesSecr : d.consignesSecr || [
+        `Présence en salle ${d.minutesAvantSecr !== undefined ? d.minutesAvantSecr : 30} minutes avant le début de l\u2019épreuve : préparation des postes (ordinateurs, sujets adaptés, copies, brouillons) et accueil des candidats.`,
+        `Présence requise jusqu\u2019à ${AppData.params.margeSecr || 0} minutes après la fin du tiers temps : retour des copies au secrétariat, vérification des émargements et du matériel.`,
+        'Secrétaire lecteur : lecture strictement littérale des sujets, sans reformulation ni explication.',
+        'Secrétaire scripteur : écrire sous la dictée exclusive du candidat, orthographe d\u2019usage assurée.',
+        'Confidentialité absolue sur les aménagements et la situation des candidats (RGPD).',
+        'Tout incident est consigné au procès-verbal et signalé immédiatement au chef de centre.',
+      ],
       consignesCouloir : d.consignesCouloir || [
         'Présence sur le couloir dès le début du créneau : la surveillance commence quand les surveillants entrent en salle.',
         'Circuler régulièrement sur toute la longueur du couloir ; veiller au silence absolu aux abords des salles.',
@@ -93,6 +101,7 @@ const Impressions = {
     $('#pc-nom').value = c.nomSign;
     $('#pc-consignes').value = c.consignes.join('\n');
     $('#pc-consignes-couloir').value = c.consignesCouloir.join('\n');
+    $('#pc-consignes-secr').value = c.consignesSecr.join('\n');
     $('#pc-logo-apercu').innerHTML = c.logoBase64
       ? `<img src="${c.logoBase64}" alt="Logo" style="max-height:50px">`
       : '<span class="field-hint">Aucun logo</span>';
@@ -103,6 +112,7 @@ const Impressions = {
   },
 
   enregistrerConfig() {
+    const _ancienDelai = PrintConfig.get().minutesAvant;
     PrintConfig.set({
       fonctionSign: $('#pc-fonction').value.trim(),
       minutesAvant: Math.max(0, parseInt($('#pc-minutes-avant').value, 10) || 0),
@@ -111,7 +121,33 @@ const Impressions = {
       nomSign: $('#pc-nom').value.trim(),
       consignes: $('#pc-consignes').value.split('\n').map(l => l.trim()).filter(Boolean),
       consignesCouloir: $('#pc-consignes-couloir').value.split('\n').map(l => l.trim()).filter(Boolean),
+      consignesSecr: $('#pc-consignes-secr').value.split('\n').map(l => l.trim()).filter(Boolean),
     });
+    // Le délai de convocation détermine l'heure du 1er créneau de couloir :
+    // s'il change, on DÉCALE les clés des affectations (et leurs verrous) pour ne rien perdre.
+    const _nouveauDelai = PrintConfig.get().minutesAvant;
+    if (_nouveauDelai !== _ancienDelai) {
+      const decal = _ancienDelai - _nouveauDelai;
+      Object.keys(AppData.affectationsCouloir).forEach(epId => {
+        Object.keys(AppData.affectationsCouloir[epId]).forEach(cid => {
+          const ancien = AppData.affectationsCouloir[epId][cid];
+          const nouveau = {};
+          Object.keys(ancien).forEach(deb => {
+            const nd = AppData.addMinutes(deb, decal);
+            nouveau[nd] = ancien[deb];
+            ancien[deb].forEach(sv => {
+              if (AppData.estVerrouille(epId, `C${cid}@${deb}`, sv)) {
+                AppData.retirerVerrou(epId, `C${cid}@${deb}`, sv);
+                AppData.verrous[AppData._cleVerrou(epId, `C${cid}@${nd}`, sv)] = true;
+              }
+            });
+          });
+          AppData.affectationsCouloir[epId][cid] = nouveau;
+        });
+      });
+      Unsaved.marquer();
+      if (window.Repartition) Repartition.rendre();
+    }
     fermerModal('modal-print-config');
     notifier('Paramètres d\u2019impression enregistrés.');
   },
@@ -296,34 +332,69 @@ const Impressions = {
 
     let corps = '';
     concernes.forEach(surv => {
+      // TOUTES les missions : salles, secrétariat, réserves, réserve TT, couloirs
       const creneaux = [];
       AppData.epreuves.forEach(ep => {
         AppData.sallesPourEpreuve(ep.id).forEach(salle => {
           if (AppData.getAffectes(ep.id, salle.id).includes(surv.id)) {
-            const fin = AppData.heureFinSalle(ep, salle);
-            creneaux.push({ ep, salle, fin });
+            const delai = salle.type === 'secretariat' ? c.minutesAvantSecr : c.minutesAvant;
+            creneaux.push({
+              ep, tri: ep.date + ep.heureDebut,
+              poste: salle.type === 'secretariat'
+                ? `🗂 Secrétariat — ${escHtml(salle.nom)} <span class="badge badge-tt">jusqu\u2019à fin TT${AppData.params.margeSecr ? ' + ' + AppData.params.margeSecr + ' min' : ''}</span>`
+                : `Salle ${escHtml(salle.nom)}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">Tiers temps</span>' : ''}`,
+              presence: `<strong>${AppData.addMinutes(ep.heureDebut, -delai)}</strong> <small>(${delai} min avant)</small>`,
+              debut: ep.heureDebut,
+              fin: AppData.heureFinSalle(ep, salle),
+            });
           }
         });
+        if (AppData.estEnReserve(ep.id, surv.id)) {
+          creneaux.push({
+            ep, tri: ep.date + ep.heureDebut,
+            poste: '🛟 Réserve <span class="badge badge-tt">remplacement immédiat</span>',
+            presence: `<strong>${AppData.addMinutes(ep.heureDebut, -c.minutesAvant)}</strong> <small>(${c.minutesAvant} min avant)</small>`,
+            debut: ep.heureDebut,
+            fin: AppData.heureFin(ep),
+          });
+        }
+        if (AppData.estEnReserveTT(ep.id, surv.id)) {
+          creneaux.push({
+            ep, tri: ep.date + ep.heureDebut,
+            poste: '🛟⏳ Réserve tiers temps <span class="badge badge-tt">présence jusqu\u2019à la fin du TT</span>',
+            presence: `<strong>${AppData.addMinutes(ep.heureDebut, -c.minutesAvant)}</strong> <small>(${c.minutesAvant} min avant)</small>`,
+            debut: ep.heureDebut,
+            fin: AppData.heureFinTT(ep),
+          });
+        }
+        AppData.creneauxCouloirDe(ep, surv.id).forEach(cc => {
+          creneaux.push({
+            ep, tri: ep.date + cc.debut,
+            poste: `🚶 Couloir — ${escHtml(cc.couloir.nom)}`,
+            presence: `<strong>${cc.debut}</strong> <small>(début du créneau)</small>`,
+            debut: ep.heureDebut,
+            fin: cc.fin,
+          });
+        });
       });
+      creneaux.sort((a, b) => a.tri.localeCompare(b.tri));
       const charge = AppData.chargeSurveillant(surv.id);
 
       corps += `<div class="page">${this._entete('Convocation — surveillance d\u2019examen')}
         <div class="bloc bloc-bleu" style="font-size:12pt">
           <strong>${escHtml(surv.nom)} ${escHtml(surv.prenom)}</strong> — ${escHtml(surv.fonction)}<br>
-          ${creneaux.length} créneau(x) de surveillance · charge totale : <strong>${AppData.formatDuree(charge.minutes)}</strong>
+          ${creneaux.length} créneau(x) (surveillance, secrétariat, réserve, couloirs) ·
+          charge totale : <strong>${AppData.formatDuree(charge.minutes)}</strong>
         </div>
         <table>
-          <tr><th>Date</th><th>Épreuve</th><th>Présence en salle</th><th>Début de l\u2019épreuve</th><th>Salle</th><th>Fin</th></tr>
+          <tr><th>Date</th><th>Épreuve</th><th>Poste</th><th>Présence</th><th>Début de l\u2019épreuve</th><th>Fin</th></tr>
           ${creneaux.map(cr => `<tr>
             <td>${escHtml(AppData.formatDate(cr.ep.date))}</td>
             <td><strong>${escHtml(cr.ep.matiere)}</strong></td>
-            <td>${(() => {
-              const delai = cr.salle.type === 'secretariat' ? c.minutesAvantSecr : c.minutesAvant;
-              return `<strong>${AppData.addMinutes(cr.ep.heureDebut, -delai)}</strong> <small>(${delai} min avant)</small>`;
-            })()}</td>
-            <td>${cr.ep.heureDebut}</td>
-            <td>${escHtml(cr.salle.nom)}${cr.salle.type === 'amenagee' ? ' <span class="badge badge-tt">Tiers temps</span>' : ''}${cr.salle.type === 'secretariat' ? ' <span class="badge badge-tt">Secrétariat</span>' : ''}</td>
-            <td>${cr.fin}</td></tr>`).join('')}
+            <td>${cr.poste}</td>
+            <td>${cr.presence}</td>
+            <td>${cr.debut}</td>
+            <td><strong>${cr.fin}</strong></td></tr>`).join('')}
         </table>
         <h2>Consignes</h2>
         <div class="bloc"><ul>${c.consignes.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul></div>
@@ -517,16 +588,7 @@ const Impressions = {
 
     const consignesSecr = `
       <div class="bloc bloc-bleu"><strong>Consignes — secrétariat d\u2019examen</strong>
-        <ul>
-          <li>Présence en salle <strong>${c.minutesAvantSecr} minutes avant</strong> le début de l\u2019épreuve :
-            préparation des postes (ordinateurs, sujets adaptés, copies, brouillons) et accueil des candidats.</li>
-          <li>Présence requise jusqu\u2019à <strong>${AppData.params.margeSecr || 0} minutes après la fin du tiers temps</strong> :
-            retour des copies au secrétariat, vérification des émargements et du matériel avant de quitter la salle.</li>
-          <li>Secrétaire lecteur : lecture strictement <em>littérale</em> des sujets, sans reformulation ni explication.
-            Secrétaire scripteur : écrire <em>sous la dictée exclusive</em> du candidat, orthographe d\u2019usage assurée.</li>
-          <li>Confidentialité absolue sur les aménagements et la situation des candidats (RGPD).</li>
-          <li>Tout incident est consigné au procès-verbal et signalé immédiatement au chef de centre.</li>
-        </ul>
+        <ul>${c.consignesSecr.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>
       </div>`;
 
     // ── Page 1 : vue d'ensemble ──
