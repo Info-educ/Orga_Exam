@@ -30,6 +30,7 @@ const PrintConfig = {
       logoBase64      : d.logoBase64 || null,
       signatureBase64 : d.signatureBase64 || null,
       minutesAvant : d.minutesAvant !== undefined ? d.minutesAvant : 15,
+      minutesAvantSecr : d.minutesAvantSecr !== undefined ? d.minutesAvantSecr : 30,
       fonctionSign : d.fonctionSign || 'Principal adjoint',
       genreSign    : d.genreSign || 'M',
       nomSign      : d.nomSign || '',
@@ -79,6 +80,7 @@ const Impressions = {
     const c = PrintConfig.get();
     $('#pc-fonction').value = c.fonctionSign;
     $('#pc-minutes-avant').value = c.minutesAvant;
+    $('#pc-minutes-avant-secr').value = c.minutesAvantSecr;
     $('#pc-genre').value = c.genreSign;
     $('#pc-nom').value = c.nomSign;
     $('#pc-consignes').value = c.consignes.join('\n');
@@ -95,6 +97,7 @@ const Impressions = {
     PrintConfig.set({
       fonctionSign: $('#pc-fonction').value.trim(),
       minutesAvant: Math.max(0, parseInt($('#pc-minutes-avant').value, 10) || 0),
+      minutesAvantSecr: Math.max(0, parseInt($('#pc-minutes-avant-secr').value, 10) || 0),
       genreSign: $('#pc-genre').value,
       nomSign: $('#pc-nom').value.trim(),
       consignes: $('#pc-consignes').value.split('\n').map(l => l.trim()).filter(Boolean),
@@ -303,7 +306,10 @@ const Impressions = {
           ${creneaux.map(cr => `<tr>
             <td>${escHtml(AppData.formatDate(cr.ep.date))}</td>
             <td><strong>${escHtml(cr.ep.matiere)}</strong></td>
-            <td><strong>${AppData.addMinutes(cr.ep.heureDebut, -c.minutesAvant)}</strong> <small>(${c.minutesAvant} min avant)</small></td>
+            <td>${(() => {
+              const delai = cr.salle.type === 'secretariat' ? c.minutesAvantSecr : c.minutesAvant;
+              return `<strong>${AppData.addMinutes(cr.ep.heureDebut, -delai)}</strong> <small>(${delai} min avant)</small>`;
+            })()}</td>
             <td>${cr.ep.heureDebut}</td>
             <td>${escHtml(cr.salle.nom)}${cr.salle.type === 'amenagee' ? ' <span class="badge badge-tt">Tiers temps</span>' : ''}${cr.salle.type === 'secretariat' ? ' <span class="badge badge-tt">Secrétariat</span>' : ''}</td>
             <td>${cr.fin}</td></tr>`).join('')}
@@ -431,45 +437,124 @@ const Impressions = {
     this._imprimer('Récap aménagements', corps);
   },
 
-  /** Secrétariat d'examen — personnels, horaires tiers temps, candidats accompagnés */
+  /** Secrétariat d'examen — vue d'ensemble + convocation individuelle détaillée par personnel */
   recapSecretariat() {
+    const c = PrintConfig.get();
     const sallesSecr = AppData.salles.filter(s => s.type === 'secretariat');
     if (!sallesSecr.length) { notifier('Aucune salle de type secrétariat d\u2019examen.', 'error'); return; }
 
-    let lignes = '';
+    const creneauxSalle = [];   // { ep, salle, affectes }
     AppData.epreuves.forEach(ep => {
       sallesSecr
         .filter(salle => !salle.epreuveIds.length || salle.epreuveIds.includes(ep.id))
-        .forEach(salle => {
-          const noms = AppData.getAffectes(ep.id, salle.id)
-            .map(id => { const s = AppData.getSurveillant(id); return s ? `${escHtml(s.nom)} ${escHtml(s.prenom)}` : ''; })
-            .filter(Boolean).join('<br>') || '<span class="badge badge-warn">À pourvoir</span>';
-          const candidats = AppData.amenagements.filter(a => a.salleId === salle.id)
-            .map(a => `${escHtml(a.candidat)}${a.classe ? ' (' + escHtml(a.classe) + ')' : ''}`)
-            .join(', ') || '—';
-          lignes += `<tr>
-            <td>${escHtml(AppData.formatDateCourt(ep.date))}</td>
-            <td><strong>${escHtml(ep.matiere)}</strong></td>
-            <td>${escHtml(salle.nom)}</td>
-            <td><strong>${ep.heureDebut}–${AppData.heureFinSalle(ep, salle)}</strong><br><span class="badge badge-tt">fin du tiers temps</span></td>
-            <td>${noms}</td>
-            <td>${candidats}</td>
-          </tr>`;
-        });
+        .forEach(salle => creneauxSalle.push({ ep, salle, affectes: AppData.getAffectes(ep.id, salle.id) }));
+    });
+    if (!creneauxSalle.length) { notifier('Aucune épreuve associée aux salles de secrétariat.', 'error'); return; }
+
+    const consignesSecr = `
+      <div class="bloc bloc-bleu"><strong>Consignes — secrétariat d\u2019examen</strong>
+        <ul>
+          <li>Présence en salle <strong>${c.minutesAvantSecr} minutes avant</strong> le début de l\u2019épreuve :
+            préparation des postes (ordinateurs, sujets adaptés, copies, brouillons) et accueil des candidats.</li>
+          <li>Présence requise <strong>jusqu\u2019à la fin du tiers temps</strong> — les candidats accompagnés composent en temps majoré.</li>
+          <li>Secrétaire lecteur : lecture strictement <em>littérale</em> des sujets, sans reformulation ni explication.
+            Secrétaire scripteur : écrire <em>sous la dictée exclusive</em> du candidat, orthographe d\u2019usage assurée.</li>
+          <li>Confidentialité absolue sur les aménagements et la situation des candidats (RGPD).</li>
+          <li>Tout incident est consigné au procès-verbal et signalé immédiatement au chef de centre.</li>
+        </ul>
+      </div>`;
+
+    // ── Page 1 : vue d'ensemble ──
+    let lignes = '';
+    creneauxSalle.forEach(({ ep, salle, affectes }) => {
+      const noms = affectes
+        .map(id => { const sv = AppData.getSurveillant(id); return sv ? `${escHtml(sv.nom)} ${escHtml(sv.prenom)}` : ''; })
+        .filter(Boolean).join('<br>') || '<span class="badge badge-warn">À pourvoir</span>';
+      const candidats = AppData.amenagements.filter(a => a.salleId === salle.id)
+        .map(a => `${escHtml(a.candidat)}${a.classe ? ' (' + escHtml(a.classe) + ')' : ''}`)
+        .join(', ') || '—';
+      lignes += `<tr>
+        <td>${escHtml(AppData.formatDateCourt(ep.date))}</td>
+        <td><strong>${escHtml(ep.matiere)}</strong></td>
+        <td>${escHtml(salle.nom)}</td>
+        <td><strong>${AppData.addMinutes(ep.heureDebut, -c.minutesAvantSecr)}</strong><br><small>(${c.minutesAvantSecr} min avant)</small></td>
+        <td>${ep.heureDebut}</td>
+        <td><strong>${AppData.heureFinSalle(ep, salle)}</strong><br><span class="badge badge-tt">fin du tiers temps</span></td>
+        <td>${AppData.formatDuree(AppData.dureeCreneau(ep, salle))}</td>
+        <td>${noms}</td>
+        <td>${candidats}</td>
+      </tr>`;
     });
 
-    if (!lignes) { notifier('Aucune épreuve associée aux salles de secrétariat.', 'error'); return; }
-
-    const corps = `<div class="page">${this._entete('Secrétariat d\u2019examen — organisation')}
-      <div class="bloc bloc-bleu">Document confidentiel — diffusion restreinte (RGPD).
-        Les personnels du secrétariat accompagnent les candidats à aménagement :
-        leur présence est requise <strong>jusqu\u2019à la fin du tiers temps</strong> de chaque épreuve.</div>
+    let corps = `<div class="page">${this._entete('Secrétariat d\u2019examen — organisation générale')}
+      <div class="bloc bloc-bleu">Document confidentiel — diffusion restreinte (RGPD).</div>
       <table>
-        <tr><th>Date</th><th>Épreuve</th><th>Salle</th><th>Horaires</th><th>Personnels</th><th>Candidats accompagnés</th></tr>
+        <tr><th>Date</th><th>Épreuve</th><th>Salle</th><th>Présence</th><th>Début</th><th>Fin</th><th>Durée</th><th>Personnels</th><th>Candidats accompagnés</th></tr>
         ${lignes}
       </table>
+      ${consignesSecr}
       ${this._signature()}${this._pied()}
     </div>`;
+
+    // ── Pages suivantes : convocation individuelle par personnel ──
+    const parPers = new Map();   // survId → [{ ep, salle }]
+    creneauxSalle.forEach(({ ep, salle, affectes }) =>
+      affectes.forEach(id => {
+        if (!parPers.has(id)) parPers.set(id, []);
+        parPers.get(id).push({ ep, salle });
+      }));
+
+    [...parPers.entries()]
+      .map(([id, crs]) => ({ sv: AppData.getSurveillant(id), crs }))
+      .filter(x => x.sv)
+      .sort((a, b) => (a.sv.nom + a.sv.prenom).localeCompare(b.sv.nom + b.sv.prenom, 'fr'))
+      .forEach(({ sv, crs }) => {
+        const totalMin = crs.reduce((a, x) => a + AppData.dureeCreneau(x.ep, x.salle), 0);
+
+        corps += `<div class="page">${this._entete(`Convocation secrétariat d\u2019examen — ${escHtml(sv.nom)} ${escHtml(sv.prenom)}`)}
+          <div class="bloc bloc-bleu">${escHtml(sv.fonction || '')} —
+            <strong>${crs.length} créneau(x), ${AppData.formatDuree(totalMin)}</strong> au total.
+            Présence requise <strong>${c.minutesAvantSecr} minutes avant</strong> chaque épreuve,
+            <strong>jusqu\u2019à la fin du tiers temps</strong>.</div>
+          <table>
+            <tr><th>Date</th><th>Épreuve</th><th>Salle</th><th>Présence en salle</th><th>Début de l\u2019épreuve</th><th>Fin (tiers temps)</th><th>Durée</th></tr>
+            ${crs.sort((x, y) => (x.ep.date + x.ep.heureDebut).localeCompare(y.ep.date + y.ep.heureDebut)).map(({ ep, salle }) => `<tr>
+              <td>${escHtml(AppData.formatDate(ep.date))}</td>
+              <td><strong>${escHtml(ep.matiere)}</strong></td>
+              <td><strong>${escHtml(salle.nom)}</strong></td>
+              <td><strong>${AppData.addMinutes(ep.heureDebut, -c.minutesAvantSecr)}</strong> <small>(${c.minutesAvantSecr} min avant)</small></td>
+              <td>${ep.heureDebut}</td>
+              <td><strong>${AppData.heureFinSalle(ep, salle)}</strong></td>
+              <td>${AppData.formatDuree(AppData.dureeCreneau(ep, salle))}</td>
+            </tr>`).join('')}
+          </table>
+          ${crs.map(({ ep, salle }) => {
+            const cands = AppData.amenagements.filter(a => a.salleId === salle.id);
+            if (!cands.length) return '';
+            return `<h2>${escHtml(ep.matiere)} (${escHtml(AppData.formatDateCourt(ep.date))}) — salle ${escHtml(salle.nom)} : candidats et aménagements</h2>
+              <table>
+                <tr><th>Candidat</th><th>Classe</th><th>Aménagements</th></tr>
+                ${cands.map(a => `<tr>
+                  <td><strong>${escHtml(a.candidat)}</strong></td>
+                  <td>${escHtml(a.classe || '—')}</td>
+                  <td>${AppData.amenagementBadges(a).map(b => escHtml(b)).join(' · ') || '—'}</td>
+                </tr>`).join('')}
+              </table>`;
+          }).join('')}
+          ${salleMateriel(crs)}
+          ${consignesSecr}
+          ${this._signature()}${this._pied()}
+        </div>`;
+      });
+
+    function salleMateriel(crs) {
+      const salles = [...new Map(crs.map(x => [x.salle.id, x.salle])).values()]
+        .filter(sa => (sa.materiel || '').trim());
+      if (!salles.length) return '';
+      return `<h2>Matériel à prévoir</h2><ul>${salles.map(sa =>
+        `<li><strong>${escHtml(sa.nom)}</strong> : ${escHtml(sa.materiel)}</li>`).join('')}</ul>`;
+    }
+
     this._imprimer('Secrétariat d\u2019examen', corps);
   },
 
