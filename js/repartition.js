@@ -70,6 +70,14 @@ const Repartition = {
       Object.keys(AppData.reservesTT).forEach(epId => {
         AppData.reservesTT[epId] = AppData.reservesTT[epId].filter(survId => AppData.estVerrouille(epId, 'RT', survId));
       });
+      Object.keys(AppData.affectationsCouloir).forEach(epId => {
+        Object.keys(AppData.affectationsCouloir[epId]).forEach(cid => {
+          Object.keys(AppData.affectationsCouloir[epId][cid]).forEach(deb => {
+            AppData.affectationsCouloir[epId][cid][deb] =
+              AppData.affectationsCouloir[epId][cid][deb].filter(sv => AppData.estVerrouille(epId, `C${cid}@${deb}`, sv));
+          });
+        });
+      });
     }
 
     // Charge simulée pendant la passe (inclut secrétariat et réserve déjà en place)
@@ -124,7 +132,39 @@ const Repartition = {
         }
       });
 
-      // 2) Réserve TIERS TEMPS : présente jusqu'à la fin du TT, pourvue en premier
+      // 2) Couloirs : créneaux d'1 h, pourvus avec le même équilibrage.
+      //    Un même surveillant peut tenir plusieurs créneaux (heures différentes)
+      //    mais pas cumuler couloir + salle/réserve sur la même épreuve.
+      const choisirCouloir = (slot) => {
+        const candidats = AppData.surveillants.filter(s =>
+          s.dispos[ep.id] &&
+          !AppData.estAffecteEpreuve(ep.id, s.id) &&
+          !AppData.estEnReserve(ep.id, s.id) &&
+          !AppData.estEnReserveTT(ep.id, s.id) &&
+          !AppData.creneauCouloirOccupe(ep.id, slot.debut, s.id) &&
+          (!s.quotaMax || charge[s.id].creneaux < s.quotaMax));
+        if (!candidats.length) return null;
+        candidats.sort((a, b) =>
+          ratio(a) - ratio(b) ||
+          charge[a.id].creneaux - charge[b.id].creneaux ||
+          alea[a.id] - alea[b.id]);
+        return candidats[0];
+      };
+      AppData.couloirs.forEach(co => {
+        AppData.creneauxCouloir(ep).forEach(slot => {
+          let besoinC = co.nbSurveillants - AppData.getAffectesCouloir(ep.id, co.id, slot.debut).length;
+          while (besoinC > 0) {
+            const elu = choisirCouloir(slot);
+            if (!elu) { manquants += besoinC; break; }
+            AppData.affecterCouloir(ep.id, co.id, slot.debut, elu.id);
+            charge[elu.id].minutes += slot.duree;
+            charge[elu.id].creneaux++;
+            pourvus++; besoinC--;
+          }
+        });
+      });
+
+      // 3) Réserve TIERS TEMPS : présente jusqu'à la fin du TT, pourvue en premier
       let besoinTT = (AppData.params.nbReservesTT || 0) - AppData.getReserveTT(ep.id).length;
       while (besoinTT > 0) {
         const elu = choisir(ep);
@@ -135,7 +175,7 @@ const Repartition = {
         pourvus++; besoinTT--;
       }
 
-      // 3) Réserve : pourvue comme les autres postes
+      // 4) Réserve : pourvue comme les autres postes
       let besoinRes = (AppData.params.nbReserves || 0) - AppData.getReserve(ep.id).length;
       while (besoinRes > 0) {
         const elu = choisir(ep);
@@ -175,6 +215,15 @@ const Repartition = {
       nbFiges += gardes.length;
       AppData.reservesTT[epId] = gardes;
     });
+    Object.keys(AppData.affectationsCouloir).forEach(epId => {
+      Object.keys(AppData.affectationsCouloir[epId]).forEach(cid => {
+        Object.keys(AppData.affectationsCouloir[epId][cid]).forEach(deb => {
+          const gardes = AppData.affectationsCouloir[epId][cid][deb].filter(sv => AppData.estVerrouille(epId, `C${cid}@${deb}`, sv));
+          nbFiges += gardes.length;
+          AppData.affectationsCouloir[epId][cid][deb] = gardes;
+        });
+      });
+    });
     Unsaved.marquer();
     this.rendre();
     notifier(nbFiges
@@ -206,6 +255,12 @@ const Repartition = {
       pourvus += Math.min(AppData.getReserve(ep.id).length, AppData.params.nbReserves || 0);
       total += AppData.params.nbReservesTT || 0;
       pourvus += Math.min(AppData.getReserveTT(ep.id).length, AppData.params.nbReservesTT || 0);
+      AppData.couloirs.forEach(co => {
+        AppData.creneauxCouloir(ep).forEach(slot => {
+          total += co.nbSurveillants;
+          pourvus += Math.min(AppData.getAffectesCouloir(ep.id, co.id, slot.debut).length, co.nbSurveillants);
+        });
+      });
     });
     return { total, pourvus };
   },
@@ -275,6 +330,23 @@ const Repartition = {
       if (!salles.length)
         lignes = '<tr><td colspan="3" class="table-empty">Aucune salle de surveillance associée à cette épreuve.</td></tr>';
 
+      // Lignes couloirs : un créneau d'1 h par ligne
+      AppData.couloirs.forEach(co => {
+        AppData.creneauxCouloir(ep).forEach((slot, i) => {
+          const affC = AppData.getAffectesCouloir(ep.id, co.id, slot.debut);
+          lignes += `
+            <tr class="row-couloir">
+              <td>${i === 0 ? `<strong>🚶 ${escHtml(co.nom)}</strong>` : ''}
+                <small style="display:block;color:var(--gray-500)">${slot.debut}–${slot.fin} (${AppData.formatDuree(slot.duree)}) · ${co.nbSurveillants} requis</small></td>
+              <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, couloir: co.id, slot: slot.debut })}'>
+                ${this._chipsCouloir(ep, co, slot)}
+                ${this._badgeManque(co.nbSurveillants - affC.length)}
+              </td>
+              <td>${this._selectAjout(ep, { couloir: co.id, slot: slot.debut })}</td>
+            </tr>`;
+        });
+      });
+
       // Ligne réserve TIERS TEMPS — bien identifiable
       const nbResTT = AppData.params.nbReservesTT || 0;
       const enReserveTT = AppData.getReserveTT(ep.id);
@@ -304,8 +376,13 @@ const Repartition = {
           <td>${this._selectAjout(ep, { reserve: true })}</td>
         </tr>`;
 
-      const pourvusEp = salles.reduce((a, s) => a + AppData.getAffectes(ep.id, s.id).length, 0) + enReserve.length + enReserveTT.length;
-      const totalEp = salles.reduce((a, s) => a + s.nbSurveillants, 0) + nbRes + nbResTT;
+      let pourvusC = 0, totalC = 0;
+      AppData.couloirs.forEach(co => AppData.creneauxCouloir(ep).forEach(slot => {
+        totalC += co.nbSurveillants;
+        pourvusC += AppData.getAffectesCouloir(ep.id, co.id, slot.debut).length;
+      }));
+      const pourvusEp = salles.reduce((a, s) => a + AppData.getAffectes(ep.id, s.id).length, 0) + enReserve.length + enReserveTT.length + pourvusC;
+      const totalEp = salles.reduce((a, s) => a + s.nbSurveillants, 0) + nbRes + nbResTT + totalC;
 
       return `
         <div class="jury-card">
@@ -371,13 +448,32 @@ const Repartition = {
     }).join('') || '<span class="calc-attente">Personne</span>';
   },
 
+  _chipsCouloir(ep, co, slot) {
+    return AppData.getAffectesCouloir(ep.id, co.id, slot.debut).map(id => {
+      const s = AppData.getSurveillant(id);
+      if (!s) return '';
+      const verrou = AppData.estVerrouille(ep.id, `C${co.id}@${slot.debut}`, id);
+      const dnd = JSON.stringify({ ep: ep.id, couloir: co.id, slot: slot.debut, surv: id });
+      return `<span class="surv-chip chip-couloir ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}"
+        ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">
+        ${verrou ? '📌 ' : ''}🚶 ${escHtml(s.nom)} ${escHtml(s.prenom)}
+        <button class="chip-lock" data-lock='${dnd}' title="${verrou ? 'Libérer' : 'Figer'}">${verrou ? '🔓' : '📌'}</button>
+        <button data-remove='${dnd}' title="Retirer">✕</button></span>`;
+    }).join('') || '<span class="calc-attente">Personne</span>';
+  },
+
   _badgeManque(n) {
     return n > 0 ? `<span class="badge badge-prio">${n} manquant(s)</span>` : '';
   },
 
   _selectAjout(ep, cible) {
-    const disponibles = AppData.surveillants.filter(s =>
-      s.dispos[ep.id] && !AppData.estMobiliseEpreuve(ep.id, s.id));
+    const disponibles = AppData.surveillants.filter(s => {
+      if (!s.dispos[ep.id]) return false;
+      if (cible.couloir !== undefined)
+        return !AppData.estAffecteEpreuve(ep.id, s.id) && !AppData.estEnReserve(ep.id, s.id)
+          && !AppData.estEnReserveTT(ep.id, s.id) && !AppData.creneauCouloirOccupe(ep.id, cible.slot, s.id);
+      return !AppData.estMobiliseEpreuve(ep.id, s.id);
+    });
     const options = disponibles.length
       ? '<option value="">+ Affecter…</option>' + disponibles.map(s => {
           const c = AppData.chargeSurveillant(s.id);
@@ -391,7 +487,8 @@ const Repartition = {
     zone.querySelectorAll('[data-lock]').forEach(btn =>
       btn.addEventListener('click', () => {
         const d = JSON.parse(btn.dataset.lock);
-        const fige = AppData.basculerVerrou(d.ep, d.reserveTT ? 'RT' : (d.reserve ? null : d.salle), d.surv);
+        const fige = AppData.basculerVerrou(d.ep,
+          d.couloir !== undefined ? `C${d.couloir}@${d.slot}` : (d.reserveTT ? 'RT' : (d.reserve ? null : d.salle)), d.surv);
         Unsaved.marquer();
         DnD.toutRafraichir();
         const s = AppData.getSurveillant(d.surv);
@@ -403,7 +500,8 @@ const Repartition = {
     zone.querySelectorAll('[data-remove]').forEach(btn =>
       btn.addEventListener('click', () => {
         const d = JSON.parse(btn.dataset.remove);
-        if (d.reserveTT) AppData.retirerReserveTT(d.ep, d.surv);
+        if (d.couloir !== undefined) AppData.desaffecterCouloir(d.ep, d.couloir, d.slot, d.surv);
+        else if (d.reserveTT) AppData.retirerReserveTT(d.ep, d.surv);
         else if (d.reserve) AppData.retirerReserve(d.ep, d.surv);
         else AppData.desaffecter(d.ep, d.salle, d.surv);
         Unsaved.marquer();
@@ -415,7 +513,8 @@ const Repartition = {
         if (!sel.value) return;
         const d = JSON.parse(sel.dataset.add);
         const survId = parseInt(sel.value, 10);
-        if (d.reserveTT) AppData.mettreEnReserveTT(d.ep, survId);
+        if (d.couloir !== undefined) AppData.affecterCouloir(d.ep, d.couloir, d.slot, survId);
+        else if (d.reserveTT) AppData.mettreEnReserveTT(d.ep, survId);
         else if (d.reserve) AppData.mettreEnReserve(d.ep, survId);
         else AppData.affecter(d.ep, d.salle, survId);
         Unsaved.marquer();
@@ -524,11 +623,13 @@ const DnD = {
   },
 
   _retirer(p) {
+    if (p.couloir !== undefined) { AppData.desaffecterCouloir(p.ep, p.couloir, p.slot, p.surv); return; }
     if (p.reserveTT) AppData.retirerReserveTT(p.ep, p.surv);
     else if (p.reserve) AppData.retirerReserve(p.ep, p.surv);
     else AppData.desaffecter(p.ep, p.salle, p.surv);
   },
   _placer(p, survId) {
+    if (p.couloir !== undefined) { AppData.affecterCouloir(p.ep, p.couloir, p.slot, survId); return; }
     if (p.reserveTT) AppData.mettreEnReserveTT(p.ep, survId);
     else if (p.reserve) AppData.mettreEnReserve(p.ep, survId);
     else AppData.affecter(p.ep, p.salle, survId);
@@ -537,7 +638,8 @@ const DnD = {
 
   /** Déplacement d'un surveillant vers une autre zone (salle ou réserve) */
   _deplacer(src, dst) {
-    if (src.ep === dst.ep && !dst.reserve === !src.reserve && !dst.reserveTT === !src.reserveTT && dst.salle === src.salle) return; // même zone
+    if (src.ep === dst.ep && !dst.reserve === !src.reserve && !dst.reserveTT === !src.reserveTT
+      && dst.salle === src.salle && dst.couloir === src.couloir && dst.slot === src.slot) return; // même zone
 
     const s = AppData.getSurveillant(src.surv);
     if (!s) return;
@@ -546,7 +648,11 @@ const DnD = {
       return;
     }
     this._retirer(src);
-    if (AppData.estMobiliseEpreuve(dst.ep, src.surv)) {
+    const conflit = dst.couloir !== undefined
+      ? (AppData.estAffecteEpreuve(dst.ep, src.surv) || AppData.estEnReserve(dst.ep, src.surv)
+         || AppData.estEnReserveTT(dst.ep, src.surv) || AppData.creneauCouloirOccupe(dst.ep, dst.slot, src.surv))
+      : AppData.estMobiliseEpreuve(dst.ep, src.surv);
+    if (conflit) {
       this._placer(src, src.surv);  // restaurer
       notifier(`${escHtml(this._nom(src.surv))} est déjà mobilisé(e) sur cette épreuve.`, 'error');
       return;

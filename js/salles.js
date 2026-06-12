@@ -91,6 +91,7 @@ const Salles = {
   },
 
   rendre() {
+    this.rendreCouloirs();
     const tbody = $('#tbody-salles');
     $('#count-salles').textContent = AppData.salles.length;
 
@@ -205,6 +206,53 @@ const Salles = {
     Unsaved.marquer();
     this.rendreAmenagements();
     notifier('Aménagement supprimé.', 'warning');
+  },
+
+  rendreCouloirs() {
+    const zone = $('#zone-couloirs');
+    if (!zone) return;
+
+    let html = `<div class="table-wrapper"><table class="data-table" style="max-width:680px">
+      <thead><tr><th>Couloir</th><th class="text-center" style="width:160px">Surveillants / créneau</th><th style="width:90px"></th></tr></thead><tbody>`;
+    if (!AppData.couloirs.length)
+      html += '<tr><td colspan="3" class="table-empty">Aucun couloir défini.</td></tr>';
+    AppData.couloirs.forEach(c => {
+      html += `<tr>
+        <td><strong>🚶 ${escHtml(c.nom)}</strong></td>
+        <td class="text-center"><input type="number" min="1" max="10" value="${c.nbSurveillants}" data-couloir-nb="${c.id}" style="width:64px"></td>
+        <td><button class="btn btn-outline btn-icon" data-couloir-del="${c.id}" title="Supprimer">🗑</button></td>
+      </tr>`;
+    });
+    html += `<tr>
+      <td><input type="text" id="couloir-nom" placeholder="ex. Couloir bâtiment A — 1er étage" style="width:100%"></td>
+      <td class="text-center"><input type="number" id="couloir-nb" min="1" max="10" value="1" style="width:64px"></td>
+      <td><button class="btn btn-accent btn-icon" id="couloir-add" title="Ajouter">+</button></td>
+    </tr></tbody></table></div>`;
+    zone.innerHTML = html;
+
+    const ajouter = () => {
+      const c = AppData.addCouloir({ nom: $('#couloir-nom').value, nbSurveillants: $('#couloir-nb').value });
+      if (!c) { notifier('Indiquez le nom du couloir.', 'warning'); return; }
+      Unsaved.marquer();
+      this.rendreCouloirs();
+      if (window.Repartition) Repartition.rendre();
+    };
+    $('#couloir-add').addEventListener('click', ajouter);
+    $('#couloir-nom').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ajouter(); } });
+
+    zone.querySelectorAll('[data-couloir-nb]').forEach(inp =>
+      inp.addEventListener('change', () => {
+        const c = AppData.getCouloir(parseInt(inp.dataset.couloirNb, 10));
+        if (c) { c.nbSurveillants = Math.max(1, parseInt(inp.value, 10) || 1); Unsaved.marquer(); if (window.Repartition) Repartition.rendre(); }
+      }));
+    zone.querySelectorAll('[data-couloir-del]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        AppData.deleteCouloir(parseInt(btn.dataset.couloirDel, 10));
+        Unsaved.marquer();
+        this.rendreCouloirs();
+        if (window.Repartition) Repartition.rendre();
+        if (window.Recap) Recap.rendre();
+      }));
   },
 
   rendreAccompagnantsEp() {

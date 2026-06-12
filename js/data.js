@@ -39,6 +39,8 @@ const AppData = {
   surveillants : [],
   affectations : {},   // { [epreuveId]: { [salleId]: [survId, ...] } }
   reserves     : {},   // { [epreuveId]: [survId, ...] } — personnels de réserve
+  couloirs : [],            // [{ id, nom, nbSurveillants }] — couloirs à surveiller
+  affectationsCouloir : {}, // { [epId]: { [couloirId]: { [heureDebutCreneau]: [survId, ...] } } }
   accompagnantsEp : {},  // { [epreuveId]: [nom, ...] } — accompagnants affectés à l'épreuve entière
   reservesTT   : {},   // { [epreuveId]: [survId, ...] } — réserve TIERS TEMPS (présente jusqu'à la fin du TT)
   verrous      : {},   // { "epId:salleId|R|RT:survId": true } — affectations figées (préservées par l'algorithme)
@@ -133,6 +135,7 @@ const AppData = {
     delete this.reserves[id];                                  // nettoyage réserve
     delete this.reservesTT[id];
     delete this.accompagnantsEp[id];
+    delete this.affectationsCouloir[id];
     this._purgerVerrous(([ep]) => ep === String(id));          // nettoyage verrous
     this.surveillants.forEach(s => delete s.dispos[id]);       // nettoyage dispos
     return true;
@@ -333,6 +336,9 @@ const AppData = {
     Object.keys(this.reservesTT).forEach(epId => {
       this.reservesTT[epId] = this.reservesTT[epId].filter(x => x !== id);
     });
+    Object.values(this.affectationsCouloir).forEach(parEp =>
+      Object.values(parEp).forEach(parC =>
+        Object.keys(parC).forEach(deb => { parC[deb] = parC[deb].filter(x => x !== id); })));
     this._purgerVerrous(([, , sv]) => sv === String(id));
     return true;
   },
@@ -453,6 +459,96 @@ const AppData = {
     return map;
   },
 
+  // ── Couloirs ─────────────────────────────────────────────────
+
+  addCouloir(f) {
+    if (!this._nextId.couloir) this._nextId.couloir = 1;
+    const c = {
+      id: this._nextId.couloir++,
+      nom: (f.nom || '').trim(),
+      nbSurveillants: Math.max(1, parseInt(f.nbSurveillants, 10) || 1),
+    };
+    if (!c.nom) return null;
+    this.couloirs.push(c);
+    return c;
+  },
+
+  getCouloir(id) { return this.couloirs.find(c => c.id === id); },
+
+  deleteCouloir(id) {
+    const i = this.couloirs.findIndex(c => c.id === id);
+    if (i === -1) return false;
+    this.couloirs.splice(i, 1);
+    Object.values(this.affectationsCouloir).forEach(parEp => { delete parEp[id]; });
+    this._purgerVerrous(([, sa]) => sa.startsWith(`C${id}@`));
+    return true;
+  },
+
+  /**
+   * Créneaux de surveillance de couloir pour une épreuve :
+   * début = heure de présence en salle des surveillants (début − délai de convocation),
+   * puis créneaux d'1 h jusqu'à la fin de l'épreuve (dernier créneau tronqué).
+   */
+  creneauxCouloir(ep) {
+    const delai = (typeof PrintConfig !== 'undefined' ? PrintConfig.get().minutesAvant : 15) || 0;
+    const finEp = this.heureFin(ep);
+    const slots = [];
+    let t = this.addMinutes(ep.heureDebut, -delai);
+    while (t < finEp && slots.length < 12) {
+      const finBrut = this.addMinutes(t, 60);
+      const fin = finBrut < finEp ? finBrut : finEp;
+      const [h1, m1] = t.split(':').map(Number);
+      const [h2, m2] = fin.split(':').map(Number);
+      slots.push({ debut: t, fin, duree: (h2 * 60 + m2) - (h1 * 60 + m1) });
+      t = fin;
+    }
+    return slots;
+  },
+
+  getAffectesCouloir(epId, couloirId, debut) {
+    return ((this.affectationsCouloir[epId] || {})[couloirId] || {})[debut] || [];
+  },
+
+  affecterCouloir(epId, couloirId, debut, survId) {
+    if (!this.affectationsCouloir[epId]) this.affectationsCouloir[epId] = {};
+    if (!this.affectationsCouloir[epId][couloirId]) this.affectationsCouloir[epId][couloirId] = {};
+    if (!this.affectationsCouloir[epId][couloirId][debut]) this.affectationsCouloir[epId][couloirId][debut] = [];
+    const l = this.affectationsCouloir[epId][couloirId][debut];
+    if (!l.includes(survId)) l.push(survId);
+  },
+
+  desaffecterCouloir(epId, couloirId, debut, survId) {
+    const l = this.getAffectesCouloir(epId, couloirId, debut);
+    const i = l.indexOf(survId);
+    if (i !== -1) l.splice(i, 1);
+    this.retirerVerrou(epId, `C${couloirId}@${debut}`, survId);
+  },
+
+  /** Le surveillant tient-il au moins un créneau de couloir sur l'épreuve ? */
+  estSurCouloir(epId, survId) {
+    const parEp = this.affectationsCouloir[epId] || {};
+    return Object.values(parEp).some(parC => Object.values(parC).some(l => l.includes(survId)));
+  },
+
+  /** Déjà pris sur un créneau de couloir démarrant à la même heure (tout couloir confondu) ? */
+  creneauCouloirOccupe(epId, debut, survId) {
+    const parEp = this.affectationsCouloir[epId] || {};
+    return Object.values(parEp).some(parC => (parC[debut] || []).includes(survId));
+  },
+
+  /** Liste { couloir, debut, fin, duree } d'un surveillant sur une épreuve */
+  creneauxCouloirDe(ep, survId) {
+    const res = [];
+    const parEp = this.affectationsCouloir[ep.id] || {};
+    this.creneauxCouloir(ep).forEach(slot => {
+      this.couloirs.forEach(co => {
+        if (((parEp[co.id] || {})[slot.debut] || []).includes(survId))
+          res.push({ couloir: co, ...slot });
+      });
+    });
+    return res;
+  },
+
   // ── Verrous (affectations figées) ────────────────────────────
 
   _cleVerrou(epId, salleId, survId) {
@@ -491,7 +587,8 @@ const AppData = {
 
   /** Mobilisé = affecté en salle OU placé en réserve sur l'épreuve */
   estMobiliseEpreuve(epId, survId) {
-    return this.estAffecteEpreuve(epId, survId) || this.estEnReserve(epId, survId) || this.estEnReserveTT(epId, survId);
+    return this.estAffecteEpreuve(epId, survId) || this.estEnReserve(epId, survId)
+      || this.estEnReserveTT(epId, survId) || this.estSurCouloir(epId, survId);
   },
 
   getReserveTT(epId)           { return this.reservesTT[epId] || []; },
@@ -566,6 +663,10 @@ const AppData = {
         creneaux++;
         minutes += this.dureeTiersTemps(ep.duree);
       }
+      this.creneauxCouloirDe(ep, survId).forEach(c => {  // couloirs : créneaux d'1 h
+        creneaux++;
+        minutes += c.duree;
+      });
     });
     return { creneaux, minutes };
   },
@@ -587,6 +688,8 @@ const AppData = {
       reserves: this.reserves,
       reservesTT: this.reservesTT,
       accompagnantsEp: this.accompagnantsEp,
+      couloirs: this.couloirs,
+      affectationsCouloir: this.affectationsCouloir,
       verrous: this.verrous,
       _nextId: this._nextId,
     };
@@ -603,6 +706,8 @@ const AppData = {
     this.reserves = obj.reserves || {};
     this.reservesTT = obj.reservesTT || {};
     this.accompagnantsEp = obj.accompagnantsEp || {};
+    this.couloirs = obj.couloirs || [];
+    this.affectationsCouloir = obj.affectationsCouloir || {};
     this.verrous = obj.verrous || {};
     this._nextId = { ...this._nextId, ...(obj._nextId || {}) };
     this._sortEpreuves();

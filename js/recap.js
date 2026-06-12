@@ -262,6 +262,9 @@ const Recap = {
         if (AppData.estEnReserveTT(ep.id, sv.id)) {
           creneaux.push({ ep, salle: null, duree: AppData.dureeTiersTemps(ep.duree), reserveTT: true });
         }
+        AppData.creneauxCouloirDe(ep, sv.id).forEach(cc => {
+          creneaux.push({ ep, salle: null, duree: cc.duree, couloir: cc });
+        });
       });
       const minutes = creneaux.reduce((a, c) => a + c.duree, 0);
       return { sv, creneaux, minutes };
@@ -284,7 +287,9 @@ const Recap = {
 
     lignes.forEach(({ sv, creneaux, minutes }) => {
       const detail = creneaux.map(c =>
-        c.reserveTT
+        c.couloir
+          ? `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — <span class="badge badge-secr">🚶 ${escHtml(c.couloir.couloir.nom)} ${c.couloir.debut}–${c.couloir.fin}</span> (${AppData.formatDuree(c.duree)})`
+          : c.reserveTT
           ? `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — <span class="badge badge-tt">🛟⏳ Réserve TT jusqu\u2019à ${AppData.heureFinTT(c.ep)}</span> (${AppData.formatDuree(c.duree)})`
           : c.reserve
           ? `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — <span class="badge badge-tt">🛟 Réserve</span> (${AppData.formatDuree(c.duree)})`
@@ -358,6 +363,12 @@ const Recap = {
             if (!mob.has(id)) mob.set(id, []);
             mob.get(id).push({ role: 'reserveTT', detail: `${ep.matiere} (jusqu\u2019à ${AppData.heureFinTT(ep)})` });
           });
+          AppData.surveillants.forEach(sv => {
+            AppData.creneauxCouloirDe(ep, sv.id).forEach(cc => {
+              if (!mob.has(sv.id)) mob.set(sv.id, []);
+              mob.get(sv.id).push({ role: 'couloir', detail: `${ep.matiere} — ${cc.couloir.nom} (${cc.debut}–${cc.fin})` });
+            });
+          });
         });
 
         const lignes = [...mob.entries()]
@@ -382,7 +393,7 @@ const Recap = {
         html += `<div class="table-wrapper"><table class="data-table">
           <thead><tr><th>Personnel</th><th>Fonction</th><th>Mobilisation(s)</th></tr></thead><tbody>`;
         lignes.forEach(({ s, roles }) => {
-          const badges = { salle: '', secr: ' <span class="badge badge-secr">Secrétariat</span>', reserve: ' <span class="badge badge-tt">Réserve</span>', reserveTT: ' <span class="badge badge-tt">🛟⏳ Réserve TT</span>' };
+          const badges = { salle: '', secr: ' <span class="badge badge-secr">Secrétariat</span>', reserve: ' <span class="badge badge-tt">Réserve</span>', reserveTT: ' <span class="badge badge-tt">🛟⏳ Réserve TT</span>', couloir: ' <span class="badge badge-secr">🚶 Couloir</span>' };
           html += `<tr>
             <td><strong>${escHtml(s.nom)}</strong> ${escHtml(s.prenom)}</td>
             <td>${escHtml(s.fonction || '')}</td>

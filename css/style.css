@@ -2798,3 +2798,14 @@ div.modal-wide { max-width: 780px; }
   background: #f5f3ff;
   border-top: 2px dashed #a78bfa;
 }
+
+/* --- Surveillance de couloirs --- */
+.surv-chip.chip-couloir {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+  color: #075985;
+}
+.row-couloir td {
+  background: #f0f9ff;
+  border-top: 1px dashed #7dd3fc;
+}

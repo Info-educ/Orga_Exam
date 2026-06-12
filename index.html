@@ -119,6 +119,10 @@
               <tbody id="tbody-salles"></tbody>
             </table>
           </div>
+        
+          <h3 class="sous-titre">🚶 Couloirs à surveiller</h3>
+          <p class="section-desc">La surveillance de couloir démarre à l’heure où les surveillants doivent être en salle, puis tourne par <strong>créneaux d’1 heure</strong> jusqu’à la fin de l’épreuve. L’affectation se fait dans le module Répartition (automatique ou manuelle).</p>
+          <div id="zone-couloirs"></div>
         </section>
 
         <!-- ═══ ONGLET AMÉNAGEMENTS ═══ -->
@@ -263,6 +267,12 @@
               <div class="impression-body"><h3>Récap aménagements</h3>
                 <p>Document confidentiel : candidats, aménagements, salles, accompagnants.</p></div>
               <button class="btn btn-primary" data-doc="amenagements">Imprimer</button>
+            </div>
+            <div class="impression-card">
+              <div class="impression-icon">🚶</div>
+              <div class="impression-body"><h3>Convocations couloirs</h3>
+                <p>Une page par surveillant de couloir : créneaux d’une heure, couloirs et consignes spécifiques modifiables.</p></div>
+              <button class="btn btn-primary" data-doc="couloirs">Imprimer</button>
             </div>
             <div class="impression-card">
               <div class="impression-icon">🗂</div>
@@ -628,6 +638,10 @@
         <fieldset class="form-fieldset"><legend>Consignes (une par ligne)</legend>
           <div class="form-group full">
             <textarea id="pc-consignes" rows="6"></textarea>
+          </div>
+          <div class="form-group full">
+            <label for="pc-consignes-couloir">Consignes surveillants de couloirs (une par ligne)</label>
+            <textarea id="pc-consignes-couloir" rows="5"></textarea>
           </div>
         </fieldset>
         <div class="modal-footer">

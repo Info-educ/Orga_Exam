@@ -31,6 +31,14 @@ const PrintConfig = {
       signatureBase64 : d.signatureBase64 || null,
       minutesAvant : d.minutesAvant !== undefined ? d.minutesAvant : 15,
       minutesAvantSecr : d.minutesAvantSecr !== undefined ? d.minutesAvantSecr : 30,
+      consignesCouloir : d.consignesCouloir || [
+        'Présence sur le couloir dès le début du créneau : la surveillance commence quand les surveillants entrent en salle.',
+        'Circuler régulièrement sur toute la longueur du couloir ; veiller au silence absolu aux abords des salles.',
+        'Accompagner les candidats aux sanitaires un par un ; noter la salle, l\u2019heure de sortie et de retour.',
+        'Interdire tout regroupement et tout usage du téléphone dans les couloirs.',
+        'Vérifier les issues et l\u2019affichage ; signaler immédiatement tout incident au chef de centre.',
+        'Attendre l\u2019arrivée du surveillant du créneau suivant avant de quitter le poste.',
+      ],
       fonctionSign : d.fonctionSign || 'Principal adjoint',
       genreSign    : d.genreSign || 'M',
       nomSign      : d.nomSign || '',
@@ -84,6 +92,7 @@ const Impressions = {
     $('#pc-genre').value = c.genreSign;
     $('#pc-nom').value = c.nomSign;
     $('#pc-consignes').value = c.consignes.join('\n');
+    $('#pc-consignes-couloir').value = c.consignesCouloir.join('\n');
     $('#pc-logo-apercu').innerHTML = c.logoBase64
       ? `<img src="${c.logoBase64}" alt="Logo" style="max-height:50px">`
       : '<span class="field-hint">Aucun logo</span>';
@@ -101,6 +110,7 @@ const Impressions = {
       genreSign: $('#pc-genre').value,
       nomSign: $('#pc-nom').value.trim(),
       consignes: $('#pc-consignes').value.split('\n').map(l => l.trim()).filter(Boolean),
+      consignesCouloir: $('#pc-consignes-couloir').value.split('\n').map(l => l.trim()).filter(Boolean),
     });
     fermerModal('modal-print-config');
     notifier('Paramètres d\u2019impression enregistrés.');
@@ -135,6 +145,7 @@ const Impressions = {
       amenagements : () => this.recapAmenagements(),
       accompagnants: () => this.fichesAccompagnants(),
       secretariat  : () => this.recapSecretariat(),
+      couloirs     : () => this.convocationsCouloirs(),
     };
     if (fns[doc]) fns[doc]();
   },
@@ -435,6 +446,59 @@ const Impressions = {
       ${this._signature()}${this._pied()}
     </div>`;
     this._imprimer('Récap aménagements', corps);
+  },
+
+  /** Convocations surveillants de couloirs — une page par personnel, consignes éditables */
+  convocationsCouloirs() {
+    const c = PrintConfig.get();
+    if (!AppData.couloirs.length) { notifier('Aucun couloir défini (onglet Salles).', 'error'); return; }
+
+    // survId → [{ ep, couloir, debut, fin, duree }]
+    const parPers = new Map();
+    AppData.epreuves.forEach(ep => {
+      AppData.surveillants.forEach(sv => {
+        AppData.creneauxCouloirDe(ep, sv.id).forEach(cc => {
+          if (!parPers.has(sv.id)) parPers.set(sv.id, []);
+          parPers.get(sv.id).push({ ep, ...cc });
+        });
+      });
+    });
+    if (!parPers.size) { notifier('Aucun surveillant affecté aux couloirs — lancez la répartition.', 'error'); return; }
+
+    const blocConsignes = `
+      <div class="bloc bloc-bleu"><strong>Consignes — surveillance des couloirs</strong>
+        <ul>${c.consignesCouloir.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>
+      </div>`;
+
+    let corps = '';
+    [...parPers.entries()]
+      .map(([id, crs]) => ({ sv: AppData.getSurveillant(id), crs }))
+      .filter(x => x.sv)
+      .sort((a, b) => (a.sv.nom + a.sv.prenom).localeCompare(b.sv.nom + b.sv.prenom, 'fr'))
+      .forEach(({ sv, crs }) => {
+        const totalMin = crs.reduce((a, x) => a + x.duree, 0);
+        corps += `<div class="page">${this._entete(`Convocation surveillance de couloir — ${escHtml(sv.nom)} ${escHtml(sv.prenom)}`)}
+          <div class="bloc bloc-bleu">${escHtml(sv.fonction || '')} —
+            <strong>${crs.length} créneau(x), ${AppData.formatDuree(totalMin)}</strong> au total.
+            La surveillance de couloir débute <strong>dès le début du créneau</strong> indiqué
+            (au moment où les surveillants de salle prennent leur poste).</div>
+          <table>
+            <tr><th>Date</th><th>Épreuve</th><th>Couloir</th><th>Début du créneau</th><th>Fin du créneau</th><th>Durée</th></tr>
+            ${crs.sort((x, y) => (x.ep.date + x.debut).localeCompare(y.ep.date + y.debut)).map(x => `<tr>
+              <td>${escHtml(AppData.formatDate(x.ep.date))}</td>
+              <td>${escHtml(x.ep.matiere)}</td>
+              <td><strong>🚶 ${escHtml(x.couloir.nom)}</strong></td>
+              <td><strong>${x.debut}</strong></td>
+              <td>${x.fin}</td>
+              <td>${AppData.formatDuree(x.duree)}</td>
+            </tr>`).join('')}
+          </table>
+          ${blocConsignes}
+          ${this._signature()}${this._pied()}
+        </div>`;
+      });
+
+    this._imprimer('Convocations couloirs', corps);
   },
 
   /** Secrétariat d'examen — vue d'ensemble + convocation individuelle détaillée par personnel */
