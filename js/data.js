@@ -200,11 +200,11 @@ const AppData = {
 
   getSalle(id) { return this.salles.find(x => x.id === id) || null; },
 
-  /** Salles concernées par une épreuve (epreuveIds vide = toutes) */
+  /** Salles concernées par une épreuve (epreuveIds vide = toutes).
+   *  INCLUT le secrétariat d'examen : les modules qui doivent l'exclure
+   *  (algorithme, affiches, fiches de préparation…) filtrent localement. */
   sallesPourEpreuve(epId) {
-    return this.salles.filter(s =>
-      s.type !== 'secretariat' &&
-      (!s.epreuveIds.length || s.epreuveIds.includes(epId)));
+    return this.salles.filter(s => !s.epreuveIds.length || s.epreuveIds.includes(epId));
   },
 
   /** Besoins fournitures calculés pour une salle */

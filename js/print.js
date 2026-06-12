@@ -310,8 +310,8 @@ const Impressions = {
             .map(id => { const s = AppData.getSurveillant(id); return s ? `${escHtml(s.nom)} ${escHtml(s.prenom)}` : ''; })
             .filter(Boolean).join(', ') || '<span class="badge badge-warn">Non pourvu</span>';
           corps += `<tr><td><strong>${escHtml(ep.matiere)}</strong></td>
-            <td>${ep.heureDebut}–${fin}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}</td>
-            <td>${escHtml(salle.nom)}</td><td>${salle.candidats || '—'}</td><td>${noms}</td></tr>`;
+            <td>${ep.heureDebut}–${fin}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}${salle.type === 'secretariat' ? ' <span class="badge badge-tt">Secrétariat</span>' : ''}</td>
+            <td>${escHtml(salle.nom)}</td><td>${salle.type === 'secretariat' ? '—' : (salle.candidats || '—')}</td><td>${noms}</td></tr>`;
         });
       });
       corps += '</table>';
