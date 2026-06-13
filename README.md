@@ -13,6 +13,10 @@ L'application fonctionne **à 100 % dans le navigateur** :
 
 - **Aucune donnée ne quitte le poste de travail** — pas de serveur, pas de cloud, pas de cookie, pas de compte.
 - Les sauvegardes sont des **fichiers locaux** (JSON / Excel) que vous gérez vous-même.
+- Une **autosauvegarde automatique** protège le travail en cours contre les fermetures accidentelles :
+  elle est stockée dans le navigateur de ce poste uniquement (localStorage) et proposée à la
+  réouverture. Sur un **poste partagé**, exportez votre session (JSON) puis videz les données de
+  site du navigateur si nécessaire. L'export JSON reste la sauvegarde officielle.
 - Pour les candidats à aménagement, il est recommandé de ne saisir que des **initiales** (le champ le rappelle).
 - Le récapitulatif des aménagements imprimé porte la mention **« Document confidentiel »**.
 

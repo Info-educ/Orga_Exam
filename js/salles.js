@@ -274,7 +274,7 @@ const Salles = {
             <small style="display:block;color:var(--gray-500)">${escHtml(AppData.formatDateCourt(ep.date))} · ${ep.heureDebut}–${AppData.heureFinTT(ep)} <span class="badge badge-tt">fin TT</span></small></td>
           <td>${AppData.getAccompagnantsEp(ep.id).map(n =>
             `<span class="surv-chip">🤝 ${escHtml(n)}
-              <button data-acc-del='${JSON.stringify({ ep: ep.id, nom: n })}' title="Retirer">✕</button></span>`).join(' ')
+              <button data-acc-del='${attrJson({ ep: ep.id, nom: n })}' title="Retirer">✕</button></span>`).join(' ')
             || '<span class="calc-attente">Personne</span>'}</td>
           <td style="white-space:nowrap">
             <input type="text" list="dl-accompagnants" data-acc-input="${ep.id}" placeholder="Nom de l\u2019accompagnant" style="width:190px">

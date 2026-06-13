@@ -26,6 +26,16 @@ function protegerScrollGlobal() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Restauration de l'autosauvegarde locale (filet anti-crash).
+  // Proposée uniquement si elle contient davantage que la session courante (vierge au lancement).
+  const auto = AppData.lireAutosauvegarde();
+  if (auto && (auto.obj.epreuves?.length || auto.obj.surveillants?.length || auto.obj.salles?.length)) {
+    const quand = auto.date ? auto.date.toLocaleString('fr-FR') : 'date inconnue';
+    if (confirm(`Une session non exportée a été retrouvée sur ce poste (autosauvegarde du ${quand}).\n\nLa restaurer ?\n\n« Annuler » démarre une session vierge (l'autosauvegarde sera remplacée à la prochaine modification).`)) {
+      try { AppData.fromJSON(auto.obj); } catch (e) { console.warn('Restauration impossible :', e); }
+    }
+  }
+
   Parametres.init();
   Salles.init();
   Surveillants.init();
@@ -38,5 +48,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Premier lancement : ouvrir les paramètres si la session est vierge
   if (!AppData.params.etablissement && !AppData.epreuves.length) {
     setTimeout(() => Parametres.ouvrir(), 300);
+  } else if (auto && AppData.epreuves.length) {
+    // Session restaurée depuis l'autosauvegarde : rappeler qu'un export JSON reste à faire.
+    Unsaved.marquer();
+    notifier('Session restaurée depuis l\u2019autosauvegarde locale. Pensez à exporter la session (JSON) pour une sauvegarde pérenne.', 'info', 8000);
   }
 });

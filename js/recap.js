@@ -137,7 +137,7 @@ const Recap = {
           const s = AppData.getSurveillant(id);
           if (!s) return '';
           const verrou = AppData.estVerrouille(ep.id, salle.id, id);
-          const dnd = JSON.stringify({ ep: ep.id, salle: salle.id, surv: id });
+          const dnd = attrJson({ ep: ep.id, salle: salle.id, surv: id });
           return `<span class="surv-chip ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">${verrou ? '📌 ' : ''}${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
         }).filter(Boolean).join(' ') || '<span class="badge badge-prio">Non pourvu</span>';
         html += `<tr>
@@ -146,7 +146,7 @@ const Recap = {
           <td>${ep.heureDebut}–${fin}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}${salle.type === 'secretariat' ? ' <span class="badge badge-secr">Secr.</span>' : ''}</td>
           <td>${escHtml(salle.nom)}</td>
           <td class="text-center">${salle.candidats || '—'}</td>
-          <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, salle: salle.id })}'>${chips}</td>
+          <td class="dnd-zone" data-drop='${attrJson({ ep: ep.id, salle: salle.id })}'>${chips}</td>
         </tr>`;
       });
       if (avecReserveTT) {
@@ -154,14 +154,14 @@ const Recap = {
           const s = AppData.getSurveillant(id);
           if (!s) return '';
           const verrou = AppData.estVerrouille(ep.id, 'RT', id);
-          const dnd = JSON.stringify({ ep: ep.id, reserveTT: true, surv: id });
+          const dnd = attrJson({ ep: ep.id, reserveTT: true, surv: id });
           return `<span class="surv-chip chip-tt ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">${verrou ? '📌 ' : ''}⏳ ${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
         }).filter(Boolean).join(' ');
         html += `<tr class="row-reserve-tt">
           <td>${ep.heureDebut}–${AppData.heureFinTT(ep)}</td>
           <td>🛟⏳ Réserve tiers temps</td>
           <td class="text-center">—</td>
-          <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, reserveTT: true })}'>${resTTChips || '<span class="calc-attente">Personne</span>'}</td>
+          <td class="dnd-zone" data-drop='${attrJson({ ep: ep.id, reserveTT: true })}'>${resTTChips || '<span class="calc-attente">Personne</span>'}</td>
         </tr>`;
       }
       if (avecReserve) {
@@ -169,14 +169,14 @@ const Recap = {
           const s = AppData.getSurveillant(id);
           if (!s) return '';
           const verrou = AppData.estVerrouille(ep.id, null, id);
-          const dnd = JSON.stringify({ ep: ep.id, reserve: true, surv: id });
+          const dnd = attrJson({ ep: ep.id, reserve: true, surv: id });
           return `<span class="surv-chip ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">${verrou ? '📌 ' : ''}${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
         }).filter(Boolean).join(' ');
         html += `<tr class="row-reserve">
           <td>${ep.heureDebut}–${AppData.heureFin(ep)}</td>
           <td>🛟 Réserve</td>
           <td class="text-center">—</td>
-          <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, reserve: true })}'>${resChips || '<span class="calc-attente">Personne</span>'}</td>
+          <td class="dnd-zone" data-drop='${attrJson({ ep: ep.id, reserve: true })}'>${resChips || '<span class="calc-attente">Personne</span>'}</td>
         </tr>`;
       }
     });
@@ -452,7 +452,7 @@ const Recap = {
         if (!s) return '';
         const c = AppData.chargeSurveillant(id);
         const verrou = AppData.estVerrouille(ep.id, null, id);
-        const dnd = JSON.stringify({ ep: ep.id, reserve: true, surv: id });
+        const dnd = attrJson({ ep: ep.id, reserve: true, surv: id });
         return `<span class="surv-chip ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">
           ${verrou ? '📌 ' : ''}${escHtml(s.nom)} ${escHtml(s.prenom)}
           <span class="dispo-count">${c.creneaux} cr. · ${AppData.formatDuree(c.minutes)}</span></span>`;
@@ -465,18 +465,18 @@ const Recap = {
         </div>
         <div style="padding:12px 16px">
           <div style="margin-bottom:8px"><strong>🛟⏳ Réserve tiers temps</strong> <span class="dispo-count">(présence jusqu\u2019à ${AppData.heureFinTT(ep)})</span></div>
-          <div class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, reserveTT: true })}' style="min-height:34px;margin-bottom:10px">
+          <div class="dnd-zone" data-drop='${attrJson({ ep: ep.id, reserveTT: true })}' style="min-height:34px;margin-bottom:10px">
             ${AppData.getReserveTT(ep.id).map(id => {
               const s = AppData.getSurveillant(id);
               if (!s) return '';
               const c = AppData.chargeSurveillant(id);
               const verrou = AppData.estVerrouille(ep.id, 'RT', id);
-              const dnd = JSON.stringify({ ep: ep.id, reserveTT: true, surv: id });
+              const dnd = attrJson({ ep: ep.id, reserveTT: true, surv: id });
               return `<span class="surv-chip chip-tt ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`}>${verrou ? '📌 ' : ''}⏳ ${escHtml(s.nom)} ${escHtml(s.prenom)} <span class="dispo-count">${c.creneaux} cr. · ${AppData.formatDuree(c.minutes)}</span></span>`;
             }).filter(Boolean).join(' ') || '<span class="calc-attente">Personne.</span>'}
           </div>
           <div style="margin-bottom:8px"><strong>🛟 Réserve affectée</strong></div>
-          <div class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, reserve: true })}' style="min-height:34px">
+          <div class="dnd-zone" data-drop='${attrJson({ ep: ep.id, reserve: true })}' style="min-height:34px">
             ${chipsReserve || '<span class="calc-attente">Personne — lancez la répartition ou glissez un surveillant ici.</span>'}
           </div>
           <div style="margin:12px 0 8px"><strong>Vivier restant</strong> <span class="dispo-count">(disponibles non mobilisés)</span></div>
@@ -562,7 +562,7 @@ const Recap = {
           const s = AppData.getSurveillant(id);
           if (!s) return '';
           const verrou = AppData.estVerrouille(ep.id, salle.id, id);
-          const dnd = JSON.stringify({ ep: ep.id, salle: salle.id, surv: id });
+          const dnd = attrJson({ ep: ep.id, salle: salle.id, surv: id });
           return `<span class="surv-chip ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">${verrou ? '📌 ' : ''}${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
         }).filter(Boolean).join(' ');
 
@@ -575,7 +575,7 @@ const Recap = {
           </div>
           <div style="padding:12px 16px">
             <div style="margin-bottom:6px"><strong>Personnels</strong></div>
-            <div class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, salle: salle.id })}' style="min-height:32px">
+            <div class="dnd-zone" data-drop='${attrJson({ ep: ep.id, salle: salle.id })}' style="min-height:32px">
               ${chips || '<span class="calc-attente">Personne — à affecter dans le module Répartition.</span>'}
             </div>
             <div style="margin:10px 0 6px"><strong>Candidats accompagnés</strong> <span class="dispo-count">(rattachés à cette salle)</span></div>

@@ -15,6 +15,14 @@ function escHtml(str) {
 }
 window.escHtml = escHtml;
 
+/** JSON sérialisé et échappé pour insertion sûre dans un attribut HTML
+ *  (les noms saisis peuvent contenir apostrophes, guillemets, chevrons…).
+ *  À la lecture : JSON.parse(el.dataset.x) — le navigateur a déjà décodé les entités. */
+function attrJson(obj) {
+  return escHtml(JSON.stringify(obj));
+}
+window.attrJson = attrJson;
+
 // ════════════════════════════════════════════════════════════════
 // NOTIFICATIONS
 // ════════════════════════════════════════════════════════════════
@@ -82,6 +90,7 @@ window.preserverScroll = preserverScroll;
 const Unsaved = {
   _modified: false,
   marquer() {
+    AppData.planifierAutosauvegarde();   // filet de sécurité : à CHAQUE modification
     if (this._modified) return;
     this._modified = true;
     $('#save-indicator')?.classList.add('visible');

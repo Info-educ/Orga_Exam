@@ -226,9 +226,10 @@ const AppData = {
   // RGPD : privilégier les initiales du candidat.
   // ────────────────────────────────────────────────────────────
 
-  addAmenagement(f) {
-    const a = {
-      id          : this._nextId.amenagement++,
+  /** Mappage UNIQUE des champs d'un aménagement (création ET modification) :
+   *  toute évolution du formulaire ne se fait qu'ici — plus de divergence possible. */
+  _mapAmenagement(f) {
+    return {
       candidat    : (f.candidat || '').trim(),
       classe      : (f.classe || '').trim(),
       tiersTemps  : !!f.tiersTemps,
@@ -245,6 +246,10 @@ const AppData = {
       accompagnant: (f.accompagnant || '').trim(),
       notes       : (f.notes || '').trim(),
     };
+  },
+
+  addAmenagement(f) {
+    const a = { id: this._nextId.amenagement++, ...this._mapAmenagement(f) };
     this.amenagements.push(a);
     return a;
   },
@@ -252,16 +257,7 @@ const AppData = {
   updateAmenagement(id, f) {
     const a = this.amenagements.find(x => x.id === id);
     if (!a) return null;
-    Object.assign(a, {
-      candidat: (f.candidat || '').trim(),
-      classe: (f.classe || '').trim(),
-      tiersTemps: !!f.tiersTemps, lecteur: !!f.lecteur, scripteur: !!f.scripteur,
-      isolement: !!f.isolement, ordinateur: !!f.ordinateur,
-      autre: (f.autre || '').trim(),
-      salleId: f.salleId ? parseInt(f.salleId, 10) : null,
-      accompagnant: (f.accompagnant || '').trim(),
-      notes: (f.notes || '').trim(),
-    });
+    Object.assign(a, this._mapAmenagement(f));
     return a;
   },
 
@@ -691,6 +687,46 @@ const AppData = {
       });
     });
     return { creneaux, minutes };
+  },
+
+  // ────────────────────────────────────────────────────────────
+  // AUTOSAUVEGARDE LOCALE (localStorage)
+  // Filet de sécurité contre les crashs / fermetures forcées :
+  // l'export JSON reste la sauvegarde officielle à conserver.
+  // RGPD : les données restent dans le navigateur de CE poste.
+  // ────────────────────────────────────────────────────────────
+
+  _AUTOSAVE_KEY: 'orga-examens.autosave.v1',
+  _autosaveTimer: null,
+
+  /** Planifie une autosauvegarde (débouncée : 1 écriture max / 800 ms) */
+  planifierAutosauvegarde() {
+    clearTimeout(this._autosaveTimer);
+    this._autosaveTimer = setTimeout(() => this.autosauvegarder(), 800);
+  },
+
+  autosauvegarder() {
+    try {
+      localStorage.setItem(this._AUTOSAVE_KEY, JSON.stringify(this.toJSON()));
+    } catch (e) {
+      // Quota dépassé ou stockage indisponible : on ne bloque jamais l'utilisateur.
+      console.warn('Autosauvegarde impossible :', e);
+    }
+  },
+
+  /** Retourne la session autosauvegardée ({obj, date}) ou null */
+  lireAutosauvegarde() {
+    try {
+      const brut = localStorage.getItem(this._AUTOSAVE_KEY);
+      if (!brut) return null;
+      const obj = JSON.parse(brut);
+      if (!obj || obj.app !== 'orga-examens') return null;
+      return { obj, date: obj.exportedAt ? new Date(obj.exportedAt) : null };
+    } catch (e) { return null; }
+  },
+
+  effacerAutosauvegarde() {
+    try { localStorage.removeItem(this._AUTOSAVE_KEY); } catch (e) { /* sans gravité */ }
   },
 
   // ────────────────────────────────────────────────────────────

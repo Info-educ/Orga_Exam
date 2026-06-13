@@ -307,7 +307,7 @@ const Repartition = {
             <small style="display:block;color:var(--gray-500)">${escHtml(AppData.formatDateCourt(ep.date))} · ${ep.heureDebut}</small></td>` : ''}
           <td><strong>${escHtml(salle.nom)}</strong> <span class="badge badge-secr">Secrétariat</span>
             <small style="display:block;color:var(--gray-500)">${salle.nbSurveillants} requis</small></td>
-          <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, salle: salle.id })}'>
+          <td class="dnd-zone" data-drop='${attrJson({ ep: ep.id, salle: salle.id })}'>
             ${this._chips(ep, salle.id)}
             ${this._badgeManque(salle.nbSurveillants - AppData.getAffectes(ep.id, salle.id).length)}
           </td>
@@ -347,7 +347,7 @@ const Repartition = {
             <tr class="row-couloir">
               <td>${i === 0 ? `<strong>🚶 ${escHtml(co.nom)}</strong>` : ''}
                 <small style="display:block;color:var(--gray-500)">${slot.debut}–${slot.fin} (${AppData.formatDuree(slot.duree)}) · ${co.nbSurveillants} requis</small></td>
-              <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, couloir: co.id, slot: slot.debut })}'>
+              <td class="dnd-zone" data-drop='${attrJson({ ep: ep.id, couloir: co.id, slot: slot.debut })}'>
                 ${this._chipsCouloir(ep, co, slot)}
                 ${this._badgeManque(co.nbSurveillants - affC.length)}
               </td>
@@ -364,7 +364,7 @@ const Repartition = {
           <tr class="row-reserve-tt">
             <td><strong>🛟⏳ Réserve tiers temps</strong>
               <small style="display:block;color:var(--gray-500)">${nbResTT} souhaité(s) · présence jusqu\u2019à ${AppData.heureFinTT(ep)} (${AppData.formatDuree(AppData.dureeTiersTemps(ep.duree))})</small></td>
-            <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, reserveTT: true })}'>
+            <td class="dnd-zone" data-drop='${attrJson({ ep: ep.id, reserveTT: true })}'>
               ${this._chips(ep, 'RT', enReserveTT)}
               ${this._badgeManque(nbResTT - enReserveTT.length)}
             </td>
@@ -378,7 +378,7 @@ const Repartition = {
         <tr class="row-reserve">
           <td><strong>🛟 Réserve</strong>
             <small style="display:block;color:var(--gray-500)">${nbRes} souhaité(s) · ${AppData.formatDuree(ep.duree)}</small></td>
-          <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, reserve: true })}'>
+          <td class="dnd-zone" data-drop='${attrJson({ ep: ep.id, reserve: true })}'>
             ${this._chips(ep, null, enReserve)}
             ${this._badgeManque(nbRes - enReserve.length)}
           </td>
@@ -426,7 +426,7 @@ const Repartition = {
           ${salle.type === 'amenagee' ? '<span class="badge badge-tt">♿ TT</span>' : ''}
           <small style="display:block;color:var(--gray-500)">${salle.nbSurveillants} requis · ${AppData.formatDuree(duree)}</small>
         </td>
-        <td class="dnd-zone" data-drop='${JSON.stringify({ ep: ep.id, salle: salle.id })}'>
+        <td class="dnd-zone" data-drop='${attrJson({ ep: ep.id, salle: salle.id })}'>
           ${this._chips(ep, salle.id)}
           ${this._badgeManque(manque)}
         </td>
@@ -444,7 +444,7 @@ const Repartition = {
       const s = AppData.getSurveillant(id);
       if (!s) return '';
       const verrou = AppData.estVerrouille(ep.id, enReserveTT ? 'RT' : (enReserve ? null : salleId), id);
-      const dnd = JSON.stringify(enReserveTT
+      const dnd = attrJson(enReserveTT
         ? { ep: ep.id, reserveTT: true, surv: id }
         : enReserve
           ? { ep: ep.id, reserve: true, surv: id }
@@ -462,7 +462,7 @@ const Repartition = {
       const s = AppData.getSurveillant(id);
       if (!s) return '';
       const verrou = AppData.estVerrouille(ep.id, `C${co.id}@${slot.debut}`, id);
-      const dnd = JSON.stringify({ ep: ep.id, couloir: co.id, slot: slot.debut, surv: id });
+      const dnd = attrJson({ ep: ep.id, couloir: co.id, slot: slot.debut, surv: id });
       return `<span class="surv-chip chip-couloir ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}"
         ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">
         ${verrou ? '📌 ' : ''}🚶 ${escHtml(s.nom)} ${escHtml(s.prenom)}
@@ -495,7 +495,7 @@ const Repartition = {
           return `<option value="${s.id}">${escHtml(s.nom)} ${escHtml(s.prenom)} (${c.creneaux} cr. · ${AppData.formatDuree(c.minutes)})</option>`;
         }).join('')
       : '<option value="">Aucun surveillant disponible</option>';
-    return `<select class="select-add" data-add='${JSON.stringify({ ep: ep.id, ...cible })}' ${!disponibles.length ? 'disabled' : ''}>${options}</select>`;
+    return `<select class="select-add" data-add='${attrJson({ ep: ep.id, ...cible })}' ${!disponibles.length ? 'disabled' : ''}>${options}</select>`;
   },
 
   _brancherActions(zone) {
