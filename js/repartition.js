@@ -436,6 +436,35 @@ const Repartition = {
 
   // ── Briques communes (chips draggables, selects, badges) ─────
 
+  /** Infobulle d'un surveillant : charge totale (toutes missions confondues)
+   *  + détail par type. Affichée au survol des chips dans la Répartition. */
+  _tooltipCharge(survId) {
+    const c = AppData.chargeSurveillant(survId);
+    const total = `Charge totale : ${AppData.formatDuree(c.minutes)} · ${c.creneaux} créneau(x)`;
+    // Ventilation par type de mission
+    let mSalle = 0, mSecr = 0, mReserve = 0, mReserveTT = 0, mCouloir = 0;
+    AppData.epreuves.forEach(ep => {
+      const parEp = AppData.affectations[ep.id] || {};
+      Object.keys(parEp).forEach(sid => {
+        if (!parEp[sid].includes(survId)) return;
+        const salle = AppData.getSalle(parseInt(sid, 10));
+        const d = salle ? AppData.dureeCreneau(ep, salle) : ep.duree;
+        if (salle && salle.type === 'secretariat') mSecr += d; else mSalle += d;
+      });
+      if (AppData.estEnReserve(ep.id, survId))   mReserve   += ep.duree;
+      if (AppData.estEnReserveTT(ep.id, survId)) mReserveTT += AppData.dureeTiersTemps(ep.duree);
+      AppData.creneauxCouloirDe(ep, survId).forEach(cc => { mCouloir += cc.duree; });
+    });
+    const parts = [];
+    if (mSalle)     parts.push(`Surveillance ${AppData.formatDuree(mSalle)}`);
+    if (mSecr)      parts.push(`Secrétariat ${AppData.formatDuree(mSecr)}`);
+    if (mReserve)   parts.push(`Réserve ${AppData.formatDuree(mReserve)}`);
+    if (mReserveTT) parts.push(`Réserve TT ${AppData.formatDuree(mReserveTT)}`);
+    if (mCouloir)   parts.push(`Couloir ${AppData.formatDuree(mCouloir)}`);
+    // Le title HTML accepte les retours à la ligne via \u000a (échappés à l'insertion)
+    return escHtml(parts.length ? `${total}\u000a(${parts.join(' · ')})` : total);
+  },
+
   _chips(ep, salleId, listeIds) {
     const enReserve = salleId === null || salleId === undefined;
     const enReserveTT = salleId === 'RT';
@@ -450,7 +479,7 @@ const Repartition = {
           ? { ep: ep.id, reserve: true, surv: id }
           : { ep: ep.id, salle: salleId, surv: id });
       return `<span class="surv-chip ${enReserveTT ? 'chip-tt' : ''} ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}"
-        ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée — l\u2019algorithme la préserve' : 'Glisser pour déplacer ou échanger'}">
+        ${verrou ? '' : `data-dnd='${dnd}'`} title="${this._tooltipCharge(id)}\u000a— ${verrou ? 'Affectation figée — l\u2019algorithme la préserve' : 'Glisser pour déplacer ou échanger'}">
         ${verrou ? '📌 ' : ''}${enReserveTT ? '⏳ ' : ''}${escHtml(s.nom)} ${escHtml(s.prenom)}${enReserveTT ? ' <span class="chip-tt-label">jusqu\u2019à ' + AppData.heureFinTT(ep) + '</span>' : ''}
         <button class="chip-lock" data-lock='${dnd}' title="${verrou ? 'Libérer cette affectation' : 'Figer : préservée si vous relancez la répartition'}">${verrou ? '🔓' : '📌'}</button>
         <button data-remove='${dnd}' title="Retirer">✕</button></span>`;
@@ -464,7 +493,7 @@ const Repartition = {
       const verrou = AppData.estVerrouille(ep.id, `C${co.id}@${slot.debut}`, id);
       const dnd = attrJson({ ep: ep.id, couloir: co.id, slot: slot.debut, surv: id });
       return `<span class="surv-chip chip-couloir ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}"
-        ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">
+        ${verrou ? '' : `data-dnd='${dnd}'`} title="${this._tooltipCharge(id)}\u000a— ${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">
         ${verrou ? '📌 ' : ''}🚶 ${escHtml(s.nom)} ${escHtml(s.prenom)}
         <button class="chip-lock" data-lock='${dnd}' title="${verrou ? 'Libérer' : 'Figer'}">${verrou ? '🔓' : '📌'}</button>
         <button data-remove='${dnd}' title="Retirer">✕</button></span>`;
@@ -545,32 +574,88 @@ const Repartition = {
     const zone = $('#zone-equite');
     if (!AppData.surveillants.length) { zone.innerHTML = ''; return; }
 
+    const REF = 18;   // quotité de référence si non renseignée
     const charges = AppData.surveillants.map(s => {
       const c = AppData.chargeSurveillant(s.id);
-      const poids = s.heuresHebdo > 0 ? s.heuresHebdo : 18;
-      return { s, ...c, poids, pondere: c.minutes * 18 / poids };  // ramené à l'équivalent 18 h
+      const poids = s.heuresHebdo > 0 ? s.heuresHebdo : REF;
+      return { s, ...c, poids, pondere: c.minutes * REF / poids };  // surveillance ramenée à l'équivalent 18 h
     });
-    const maxMin = Math.max(1, ...charges.map(c => c.pondere));
-    const actifs = charges.filter(c => c.creneaux > 0);
+
+    // Échelles indépendantes pour les deux jauges
+    const maxMin    = Math.max(1, ...charges.map(c => c.minutes));    // temps de surveillance réel
+    const maxHebdo  = Math.max(1, ...charges.map(c => c.poids));      // quotité hebdomadaire
+
+    // Statistiques (sur les surveillants effectivement mobilisés)
+    const actifs  = charges.filter(c => c.creneaux > 0);
     const moyenne = actifs.length ? actifs.reduce((a, c) => a + c.minutes, 0) / actifs.length : 0;
-    const ecart = actifs.length
-      ? Math.sqrt(actifs.reduce((a, c) => a + Math.pow(c.pondere - (actifs.reduce((x, y) => x + y.pondere, 0) / actifs.length), 2), 0) / actifs.length) : 0;
+    const moyPond = actifs.length ? actifs.reduce((a, c) => a + c.pondere, 0) / actifs.length : 0;
+    const ecart   = actifs.length
+      ? Math.sqrt(actifs.reduce((a, c) => a + Math.pow(c.pondere - moyPond, 2), 0) / actifs.length) : 0;
+
+    /**
+     * Détection d'incohérence : on compare la charge PONDÉRÉE (temps de surveillance
+     * ramené à 18 h/sem) à la moyenne pondérée. Un écart important signale un déséquilibre
+     * au regard de la quotité — typiquement un petit temps partiel très sollicité (surcharge)
+     * ou un temps plein peu sollicité (sous-charge). Seuil : ±25 % de la moyenne.
+     */
+    const statut = (c) => {
+      if (!c.creneaux) return { cls: 'vide', flag: '', txt: 'Aucun créneau' };
+      if (!moyPond)    return { cls: 'ok', flag: '', txt: '' };
+      const r = c.pondere / moyPond;
+      if (r >= 1.25) return { cls: 'haut', flag: '▲', txt: 'Surcharge au regard de la quotité' };
+      if (r <= 0.75) return { cls: 'bas',  flag: '▼', txt: 'Sous-charge au regard de la quotité' };
+      return { cls: 'ok', flag: '', txt: 'Équilibré' };
+    };
+
+    const lignes = charges
+      .sort((a, b) => b.minutes - a.minutes ||              // 1) temps de surveillance réel décroissant
+        (a.s.nom + a.s.prenom).localeCompare(b.s.nom + b.s.prenom, 'fr'))
+      .map(c => {
+        const st = statut(c);
+        const hebdoTxt = c.s.heuresHebdo ? `${c.s.heuresHebdo} h/sem` : `${REF} h/sem (déf.)`;
+        const wSurv  = Math.round(c.minutes / maxMin * 100);
+        const wHebdo = Math.round(c.poids   / maxHebdo * 100);
+        return `
+          <div class="equite-row2 equite-${st.cls}" title="${escHtml(this._tooltipCharge(c.s.id))}">
+            <div class="equite-nom2">
+              ${st.flag ? `<span class="equite-flag flag-${st.cls}">${st.flag}</span>` : ''}
+              <span class="equite-nom-txt">${escHtml(c.s.nom)} ${escHtml(c.s.prenom)}</span>
+              <span class="dispo-count">${escHtml(hebdoTxt)}</span>
+            </div>
+            <div class="equite-jauges">
+              <div class="equite-jauge" title="Temps de surveillance : ${AppData.formatDuree(c.minutes)}">
+                <span class="equite-jauge-lib">Surveillance</span>
+                <span class="equite-bar-wrap"><span class="equite-bar bar-surv" style="width:${wSurv}%"></span></span>
+                <span class="equite-jauge-val"><strong>${AppData.formatDuree(c.minutes)}</strong> · ${c.creneaux} cr.</span>
+              </div>
+              <div class="equite-jauge" title="Quotité hebdomadaire habituelle : ${escHtml(hebdoTxt)}">
+                <span class="equite-jauge-lib">Quotité</span>
+                <span class="equite-bar-wrap"><span class="equite-bar bar-hebdo" style="width:${wHebdo}%"></span></span>
+                <span class="equite-jauge-val">${c.s.heuresHebdo ? c.s.heuresHebdo + ' h/sem' : '—'}</span>
+              </div>
+            </div>
+            ${st.txt ? `<div class="equite-statut statut-${st.cls}">${st.flag} ${escHtml(st.txt)}</div>` : '<div class="equite-statut"></div>'}
+          </div>`;
+      }).join('');
+
+    const nbSans = charges.filter(c => !c.creneaux).length;
+    const nbAlerte = charges.filter(c => { const s = statut(c); return s.cls === 'haut' || s.cls === 'bas'; }).length;
 
     zone.innerHTML = `
       <div class="calc-panel">
-        <div class="calc-titre">⚖ Équité de la répartition <small style="font-weight:400">(surveillance + secrétariat + réserve, pondérée par la quotité hebdomadaire)</small></div>
-        <div class="calc-desc">Charge moyenne : <strong>${AppData.formatDuree(Math.round(moyenne))}</strong>
+        <div class="calc-titre">⚖ Équité de la répartition
+          <small style="font-weight:400">(surveillance + secrétariat + réserve, triée par temps de surveillance décroissant)</small></div>
+        <div class="calc-desc">
+          Temps de surveillance moyen : <strong>${AppData.formatDuree(Math.round(moyenne))}</strong>
           · Écart-type pondéré : <strong>${Math.round(ecart)} min éq. 18 h</strong>
-          · ${charges.filter(c => !c.creneaux).length} surveillant(s) sans créneau
-          — les barres représentent la charge <strong>ramenée à 18 h/sem</strong> : à barres égales, répartition équitable.</div>
-        <div class="equite-grid">
-          ${charges.sort((a, b) => b.pondere - a.pondere).map(c => `
-            <div class="equite-row">
-              <span class="equite-nom">${escHtml(c.s.nom)} ${escHtml(c.s.prenom)}<span class="dispo-count"> ${c.s.heuresHebdo ? c.s.heuresHebdo + ' h/sem' : ''}</span></span>
-              <span class="equite-bar-wrap"><span class="equite-bar" style="width:${Math.round(c.pondere / maxMin * 100)}%"></span></span>
-              <span class="equite-val">${c.creneaux} cr. · ${AppData.formatDuree(c.minutes)}</span>
-            </div>`).join('')}
+          · ${nbSans} surveillant(s) sans créneau
+          ${nbAlerte ? `· <strong style="color:#b45309">${nbAlerte} incohérence(s) détectée(s)</strong>` : '· <strong style="color:#15803d">aucune incohérence</strong>'}
+          <br><small>Pour chaque personne, deux jauges : <strong>Surveillance</strong> (temps réellement effectué) et
+          <strong>Quotité</strong> (heures hebdomadaires habituelles). Si les deux jauges sont nettement différentes,
+          c'est le signe d'un déséquilibre : <span class="flag-haut">▲</span> beaucoup de surveillance pour une faible quotité,
+          <span class="flag-bas">▼</span> peu de surveillance pour une quotité élevée.</small>
         </div>
+        <div class="equite-grid2">${lignes}</div>
       </div>`;
   },
 };

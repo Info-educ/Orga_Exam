@@ -2427,56 +2427,12 @@ div.modal-wide { max-width: 780px; }
 }
 .sidebar-btn-tour:hover { background: #dcfce7; }
 
-/* ── Bouton « ? » flottant permanent + menu ─────────────────────── */
-#tuto-fab {
-  position: fixed; right: 22px; bottom: 22px;
-  width: 52px; height: 52px;
-  border-radius: 50%; border: none;
-  background: var(--tuto-primary); color: #fff;
-  font-size: 1.5rem; font-weight: 700; cursor: pointer;
-  box-shadow: 0 6px 18px rgba(37,99,235,.40);
-  z-index: 8000;
-  display: flex; align-items: center; justify-content: center;
-  transition: background .15s, transform .15s, box-shadow .15s;
-}
-#tuto-fab:hover { background: var(--tuto-primary-h); transform: translateY(-2px); }
-#tuto-fab:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
-
-#tuto-fab-menu {
-  position: fixed; right: 22px; bottom: 84px;
-  background: var(--tuto-bg);
-  border: 1px solid var(--tuto-border);
-  border-radius: 12px;
-  box-shadow: var(--tuto-shadow);
-  padding: 6px;
-  z-index: 8001;
-  display: none; flex-direction: column; min-width: 220px;
-  animation: tuto-slide-in .16s ease;
-}
-#tuto-fab-menu.open { display: flex; }
-#tuto-fab-menu button {
-  background: none; border: none; text-align: left;
-  padding: 10px 12px; border-radius: 8px; cursor: pointer;
-  font-size: .88rem; color: var(--tuto-text);
-  transition: background .12s;
-}
-#tuto-fab-menu button:hover { background: #f1f5f9; }
-
-/* ── Accessibilité : respect des préférences de mouvement réduit ─── */
-@media (prefers-reduced-motion: reduce) {
-  .tuto-modal, .tuto-welcome-box, #tuto-tour-bubble,
-  .tuto-bandeau, #tuto-fab-menu { animation: none !important; }
-  .tuto-spotlight-target { animation: none !important; }
-}
-
 /* ── Masquer à l'impression ─────────────────────────────────────── */
 @media print {
   #tuto-modal-overlay,
   #tuto-welcome-overlay,
   #tuto-tour-overlay,
   #tuto-tour-bubble,
-  #tuto-fab,
-  #tuto-fab-menu,
   .tuto-bandeau,
   .btn-tab-help,
   .sidebar-btn-help,
@@ -2713,6 +2669,59 @@ div.modal-wide { max-width: 780px; }
   transition: width 0.3s;
 }
 .equite-val { color: var(--muted, #64748b); text-align: right; white-space: nowrap; }
+
+/* --- Équité v2 : double jauge (surveillance + quotité) + drapeau d'incohérence --- */
+.equite-grid2 {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--border, #d8dee9);
+  border-radius: 10px;
+  padding: 8px 10px;
+  box-shadow: 0 1px 3px rgba(13, 34, 64, 0.07);
+}
+.equite-row2 {
+  display: grid;
+  grid-template-columns: 230px 1fr 210px;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 8px;
+  border-radius: 8px;
+  border-left: 4px solid transparent;
+}
+.equite-row2:nth-child(even) { background: #f8fafc; }
+.equite-row2.equite-haut { border-left-color: #f59e0b; background: #fffbeb; }
+.equite-row2.equite-bas  { border-left-color: #3b82f6; background: #eff6ff; }
+.equite-row2.equite-vide { opacity: 0.55; }
+
+.equite-nom2 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.equite-nom-txt { font-weight: 600; color: var(--blue-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.equite-nom2 .dispo-count { white-space: nowrap; }
+.equite-flag { font-size: 0.8rem; font-weight: 700; line-height: 1; }
+.flag-haut { color: #b45309; }
+.flag-bas  { color: #1d4ed8; }
+
+.equite-jauges { display: flex; flex-direction: column; gap: 4px; }
+.equite-jauge {
+  display: grid;
+  grid-template-columns: 84px 1fr 132px;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+.equite-jauge-lib { color: var(--muted, #64748b); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.equite-jauge-val { text-align: right; color: var(--blue-900); white-space: nowrap; }
+.equite-jauge .equite-bar-wrap { display: block; height: 11px; }
+.equite-jauge .equite-bar { display: block; height: 100%; }
+.bar-surv  { background: linear-gradient(90deg, var(--teal-500, #0d9488), var(--blue-800)); }
+.bar-hebdo { background: linear-gradient(90deg, #cbd5e1, #94a3b8); }
+
+.equite-statut { font-size: 0.78rem; text-align: right; white-space: nowrap; }
+.statut-haut { color: #b45309; font-weight: 600; }
+.statut-bas  { color: #1d4ed8; font-weight: 600; }
+.statut-ok   { color: #15803d; }
+.statut-vide { color: #94a3b8; }
+
 .equite-stats {
   display: flex;
   gap: 20px;
@@ -2752,6 +2761,9 @@ div.modal-wide { max-width: 780px; }
 
 @media (max-width: 760px) {
   .equite-row { grid-template-columns: 120px 1fr 80px; }
+  .equite-row2 { grid-template-columns: 1fr; gap: 6px; }
+  .equite-statut { text-align: left; }
+  .equite-jauge { grid-template-columns: 72px 1fr 110px; }
   .bandeau-session { padding: 8px 14px; font-size: 0.82rem; }
 }
 
