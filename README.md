@@ -19,6 +19,7 @@ L'application fonctionne **à 100 % dans le navigateur** :
   site du navigateur si nécessaire. L'export JSON reste la sauvegarde officielle.
 - Pour les candidats à aménagement, il est recommandé de ne saisir que des **initiales** (le champ le rappelle).
 - Le récapitulatif des aménagements imprimé porte la mention **« Document confidentiel »**.
+- **Liste nominative des candidats** (onglet Candidats) : importée et conservée **localement** le temps de la session, puis **purgeable en un clic** (« Purger les candidats ») — minimisation et conservation limitée à la finalité. À recenser au **registre des traitements** de l'établissement. La date de naissance ne sert qu'au dédoublonnage (faute d'INE dans le fichier) ; aucune donnée de santé n'est requise (les aménagements se décrivent en texte libre).
 
 > Une fois la page chargée, l'application fonctionne même sans connexion
 > (la connexion n'est nécessaire qu'au premier chargement, pour la librairie Excel).
@@ -39,12 +40,13 @@ L'application fonctionne **à 100 % dans le navigateur** :
 | Étape | Onglet | Ce qu'on y fait |
 |---|---|---|
 | 1 | **Épreuves** | Calendrier : date, matière, heure, durée. Les fins d'épreuve **et fins tiers temps** (durée × 4/3) sont calculées automatiquement. |
-| 2 | **Salles** | Salles ordinaires, salles aménagées (tiers temps), secrétariat d'examen. Capacité, candidats, nombre de surveillants, besoins matériels. Les quantités de **sujets / copies / brouillons** sont calculées avec la marge paramétrée. |
-| 3 | **Aménagements** | Candidats à aménagement (initiales) : tiers temps, secrétaire lecteur/scripteur, ordinateur, salle à effectif réduit… et salle d'affectation. |
-| 4 | **Surveillants** | Liste des personnels mobilisables, puis **grille des disponibilités** : une case par épreuve, boutons « tout cocher » par ligne ou par colonne. Quota maximal facultatif par personne. |
-| 5 | **Répartition** | Bouton **Répartir automatiquement** : l'algorithme pourvoit chaque poste en choisissant à chaque fois le surveillant disponible le **moins chargé en minutes** (les créneaux en salle aménagée comptent en durée tiers temps). Ajustements manuels possibles (ajout/retrait par salle) et **panneau d'équité** (barres de charge, moyenne, écart-type). |
-| 6 | **Récap** | Indicateurs clés, **points de vigilance** automatiques (postes non pourvus, capacités dépassées, aménagements sans salle, lecteur/scripteur sans accompagnant…), planning général. |
-| 7 | **Impressions** | Les 7 documents de la session (voir ci-dessous), avec en-tête établissement, logo facultatif et signature. |
+| 2 | **Candidats** | *(optionnel — examens blancs notamment)* Liste nominative importée d'un fichier Excel (feuille **« Élèves »** : Sexe, Nom, Prénom, Date de naissance, Classe, Aménagements, Options). Dédoublonnage automatique sur nom + prénom + date. Un aménagement renseigné crée et relie une fiche dans l'onglet Aménagements. **Modèle Excel vierge téléchargeable** depuis l'onglet. Cyclades couvrant déjà l'examen réel, ce module vise surtout les épreuves blanches. |
+| 3 | **Salles** | Salles ordinaires, salles aménagées (tiers temps), secrétariat d'examen. Capacité, candidats, nombre de surveillants, besoins matériels. Les quantités de **sujets / copies / brouillons** sont calculées avec la marge paramétrée. |
+| 4 | **Aménagements** | Candidats à aménagement (initiales) : tiers temps, secrétaire lecteur/scripteur, ordinateur, salle à effectif réduit… et salle d'affectation. |
+| 5 | **Surveillants** | Liste des personnels mobilisables, puis **grille des disponibilités** : une case par épreuve, boutons « tout cocher » par ligne ou par colonne. Quota maximal facultatif par personne. |
+| 6 | **Répartition** | Bouton **Répartir automatiquement** : l'algorithme pourvoit chaque poste en choisissant à chaque fois le surveillant disponible le **moins chargé en minutes** (les créneaux en salle aménagée comptent en durée tiers temps). Ajustements manuels possibles (ajout/retrait par salle) et **panneau d'équité** (barres de charge, moyenne, écart-type). |
+| 7 | **Récap** | Indicateurs clés, **points de vigilance** automatiques (postes non pourvus, capacités dépassées, aménagements sans salle, lecteur/scripteur sans accompagnant…), planning général. |
+| 8 | **Impressions** | Les 7 documents de la session (voir ci-dessous), avec en-tête établissement, logo facultatif et signature. |
 
 ---
 
@@ -85,12 +87,19 @@ orga-examens/
     ├── ui.js           Navigation, notifications, modales, indicateur de sauvegarde
     ├── parametres.js   Paramètres de session + CRUD épreuves
     ├── salles.js       CRUD salles + aménagements
+    ├── candidats.js    Liste nominative : import Excel, affichage, purge (RGPD)
     ├── surveillants.js CRUD surveillants + grille de disponibilités
     ├── repartition.js  Algorithme d'affectation équilibrée + équité
     ├── recap.js        Indicateurs, alertes de pilotage, planning
     ├── print.js        Génération des 7 documents imprimables
     └── app.js          Point d'entrée
+
+tests/
+    ├── candidats.test.js   12 tests de non-régression du module candidats (node)
+    └── fixture-eleves.json  Jeu de données réel anonymisé (import)
 ```
+
+Tests : `node tests/candidats.test.js` (aucune dépendance).
 
 Application **sans dépendance serveur** ; seule librairie externe :
 [SheetJS](https://sheetjs.com/) (lecture/écriture Excel), chargée par CDN.
@@ -99,5 +108,8 @@ Application **sans dépendance serveur** ; seule librairie externe :
 
 ## 🔧 Évolutions envisageables
 
-L'architecture en modules indépendants facilite les ajouts : convocations individuelles
-des candidats, gestion multi-sessions, export PDF natif, plan de salle nominatif…
+L'architecture en modules indépendants facilite les ajouts. Suite prévue pour le module candidats
+(**P1 / P2**) : liaison épreuve ↔ option (auto-détection des libellés + assignation manuelle par
+groupe, sans nomenclature figée), génération des **numéros d'anonymat** et des bordereaux de
+correction anonymisés, affectation **nominative** en salle, gestion du **jour J** (présence/absence),
+plan de salle nominatif et convocations individuelles.

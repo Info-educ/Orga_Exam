@@ -14,6 +14,7 @@ function protegerScrollGlobal() {
   const cibles = [
     [Parametres,   ['rendreEpreuves']],
     [Salles,       ['rendre', 'rendreAmenagements']],
+    [Candidats,    ['rendre']],
     [Surveillants, ['rendre']],
     [Repartition,  ['rendre']],
     [Recap,        ['rendre']],
@@ -38,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   Parametres.init();
   Salles.init();
+  Candidats.init();
   Surveillants.init();
   Repartition.init();
   Recap.init();

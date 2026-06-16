@@ -31,11 +31,13 @@ const AppData = {
     nbReserves    : 2,              // surveillants de réserve souhaités par épreuve
     nbReservesTT  : 1,              // réserve tiers temps : présente jusqu'à la fin du TT
     margeSecr     : 10,             // min ajoutées après la fin du TT pour le secrétariat (retour copies, vérifications)
+    candidatsNominatifs : false,    // false = effectifs de salle saisis à la main (existant) ; true = liste nominative (module candidats)
   },
 
   epreuves     : [],
   salles       : [],
   amenagements : [],
+  candidats    : [],   // liste nominative (module candidats) — voir section CANDIDATS
   surveillants : [],
   affectations : {},   // { [epreuveId]: { [salleId]: [survId, ...] } }
   reserves     : {},   // { [epreuveId]: [survId, ...] } — personnels de réserve
@@ -45,7 +47,7 @@ const AppData = {
   reservesTT   : {},   // { [epreuveId]: [survId, ...] } — réserve TIERS TEMPS (présente jusqu'à la fin du TT)
   verrous      : {},   // { "epId:salleId|R|RT:survId": true } — affectations figées (préservées par l'algorithme)
 
-  _nextId : { epreuve: 1, salle: 1, amenagement: 1, surveillant: 1 },
+  _nextId : { epreuve: 1, salle: 1, amenagement: 1, surveillant: 1, candidat: 1 },
 
   // ────────────────────────────────────────────────────────────
   // Helpers
@@ -138,6 +140,12 @@ const AppData = {
     delete this.affectationsCouloir[id];
     this._purgerVerrous(([ep]) => ep === String(id));          // nettoyage verrous
     this.surveillants.forEach(s => delete s.dispos[id]);       // nettoyage dispos
+    this.candidats.forEach(c => {                              // nettoyage état nominatif par épreuve
+      delete (c.salleParEpreuve || {})[id];
+      delete (c.numerosAnonymat || {})[id];
+      delete (c.presence || {})[id];
+      if (Array.isArray(c.epreuveIds)) c.epreuveIds = c.epreuveIds.filter(e => e !== id);
+    });
     return true;
   },
 
@@ -194,6 +202,11 @@ const AppData = {
     this.salles.splice(i, 1);
     Object.values(this.affectations).forEach(parEp => delete parEp[id]);
     this.amenagements.forEach(a => { if (a.salleId === id) a.salleId = null; });
+    this.candidats.forEach(c => {                              // nettoyage affectations nominatives
+      Object.keys(c.salleParEpreuve || {}).forEach(ep => {
+        if (c.salleParEpreuve[ep] === id) delete c.salleParEpreuve[ep];
+      });
+    });
     this._purgerVerrous(([, sa]) => sa === String(id));
     return true;
   },
@@ -283,6 +296,184 @@ const AppData = {
     if (a.calculatrice) b.push('Calculatrice autorisée (simple, non programmable, sans mémoire)');
     if (a.autre)      b.push(a.autre);
     return b;
+  },
+
+  // ────────────────────────────────────────────────────────────
+  // CANDIDATS — CRUD, import, dédoublonnage, effectif dérivé
+  // RGPD : liste nominative locale, conservée le temps de la session et
+  // purgeable (purgerCandidats). Les aménagements restent portés par
+  // amenagements[] ; un candidat y est relié par amenagementId.
+  // ────────────────────────────────────────────────────────────
+
+  /** Normalise une date de naissance hétérogène (objet Date, n° de série Excel,
+   *  texte JJ/MM/AAAA ou ISO) vers 'AAAA-MM-JJ'. Renvoie '' si non interprétable. */
+  _normaliserDate(v) {
+    if (v == null || v === '') return '';
+    if (Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v))
+      return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+    if (typeof v === 'number') {                       // n° de série Excel (base 1899-12-30)
+      const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000);
+      return isNaN(d) ? '' : d.toISOString().slice(0, 10);
+    }
+    const s = String(v).trim();
+    const fr = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);  // JJ/MM/AAAA
+    if (fr) return `${fr[3]}-${fr[2]}-${fr[1]}`;
+    return s;                                           // déjà ISO ou autre : conservé tel quel
+  },
+
+  /** Clé naturelle de dédoublonnage (faute d'INE dans le fichier) :
+   *  nom + prénom + date de naissance, insensible à la casse et aux espaces. */
+  _cleCandidat(nom, prenom, dateNaissance) {
+    return [nom, prenom, dateNaissance]
+      .map(x => String(x ?? '').trim().toLowerCase().replace(/\s+/g, ' '))
+      .join('|');
+  },
+
+  trouverCandidat(nom, prenom, dateNaissance) {
+    const cle = this._cleCandidat(nom, prenom, dateNaissance);
+    return this.candidats.find(c => this._cleCandidat(c.nom, c.prenom, c.dateNaissance) === cle) || null;
+  },
+
+  /** Mappage UNIQUE des champs ÉDITABLES/IMPORTABLES (création ET modification).
+   *  L'état opérationnel (numéros d'anonymat, affectation en salle, présence) n'est
+   *  PAS mappé ici : il est initialisé à la création et préservé lors des modifications
+   *  (même principe que _mapAmenagement, pour éviter toute perte silencieuse de champ). */
+  _mapCandidat(f) {
+    const options = Array.isArray(f.options)
+      ? f.options
+      : [f.option1, f.option2, f.option3, f.option4, f.option5, f.option6];
+    return {
+      nom          : (f.nom || '').trim(),
+      prenom       : (f.prenom || '').trim(),
+      sexe         : (f.sexe || '').toString().trim().toUpperCase().slice(0, 1),   // 'M' | 'F' | ''
+      dateNaissance: this._normaliserDate(f.dateNaissance),
+      classe       : (f.classe || '').toString().trim(),
+      options      : options.map(o => String(o ?? '').trim()).filter(Boolean),
+      epreuveIds   : Array.isArray(f.epreuveIds) ? f.epreuveIds.map(Number) : [],
+      amenagementId: f.amenagementId != null ? parseInt(f.amenagementId, 10) : null,
+      notes        : (f.notes || '').toString().trim(),
+    };
+  },
+
+  addCandidat(f) {
+    const c = {
+      id: this._nextId.candidat++,
+      ...this._mapCandidat(f),
+      numerosAnonymat: {},   // { [epreuveId]: "0457" }              — généré au P1
+      salleParEpreuve: {},   // { [epreuveId]: salleId }             — affecté au P2
+      presence       : {},   // { [epreuveId]: 'present'|'absent' }  — jour J (P2)
+    };
+    this.candidats.push(c);
+    return c;
+  },
+
+  updateCandidat(id, f) {
+    const c = this.candidats.find(x => x.id === id);
+    if (!c) return null;
+    Object.assign(c, this._mapCandidat(f));   // préserve numerosAnonymat / salleParEpreuve / presence
+    return c;
+  },
+
+  deleteCandidat(id) {
+    const i = this.candidats.findIndex(x => x.id === id);
+    if (i === -1) return false;
+    // L'aménagement lié reste autonome (il a pu être saisi à la main) : non supprimé d'office.
+    this.candidats.splice(i, 1);
+    return true;
+  },
+
+  getCandidat(id) { return this.candidats.find(x => x.id === id) || null; },
+
+  /** Purge de toute la liste nominative (fin de session — minimisation RGPD). */
+  purgerCandidats() {
+    this.candidats = [];
+    this._nextId.candidat = 1;
+  },
+
+  _sortCandidats() {
+    this.candidats.sort((a, b) =>
+      (a.nom || '').localeCompare(b.nom || '', 'fr') ||
+      (a.prenom || '').localeCompare(b.prenom || '', 'fr'));
+  },
+
+  /** Catalogue des libellés d'options réellement présents, dédupliqués et triés.
+   *  Sert (P1) à relier une épreuve à une/des option(s) SANS coder en dur la
+   *  nomenclature du Bac : les libellés sont découverts dans les données importées. */
+  cataloguerOptions() {
+    const set = new Map();
+    this.candidats.forEach(c => (c.options || []).forEach(o => {
+      const v = String(o).trim(); const k = v.toLowerCase();
+      if (v && !set.has(k)) set.set(k, v);     // 1re occurrence = libellé canonique
+    }));
+    return [...set.values()].sort((a, b) => a.localeCompare(b, 'fr'));
+  },
+
+  amenagementDuCandidat(c) {
+    return c && c.amenagementId ? this.getAmenagement(c.amenagementId) : null;
+  },
+  candidatPourAmenagement(amId) {
+    return this.candidats.find(c => c.amenagementId === amId) || null;
+  },
+
+  /** Effectif d'une salle : DÉRIVÉ de la liste nominative si des candidats y sont
+   *  affectés (pour l'épreuve donnée), SINON repli sur le compteur saisi à la main
+   *  (salle.candidats). Rétrocompatible : sans nominatif, renvoie l'existant.
+   *  Point d'entrée unique vers lequel récap/impressions/matériel migreront. */
+  effectifSalle(salleId, epreuveId = null) {
+    const nominatifs = this.candidats.filter(c => {
+      const map = c.salleParEpreuve || {};
+      if (epreuveId != null) return map[epreuveId] === salleId;
+      return Object.values(map).includes(salleId);
+    });
+    if (nominatifs.length) return nominatifs.length;
+    const s = this.getSalle(salleId);
+    return s ? (s.candidats || 0) : 0;
+  },
+
+  /** Import d'un lot de lignes « Élèves » (objets issus de XLSX.sheet_to_json).
+   *  Crée les candidats, dédoublonne sur nom+prénom+date, et crée/rattache un
+   *  aménagement quand la colonne « Aménagements » est renseignée.
+   *  Renvoie { ajoutes, ignores, amenagements }. */
+  importerCandidatsRows(rows) {
+    let ajoutes = 0, ignores = 0, amen = 0;
+    (rows || []).forEach(r => {
+      const nom    = String(r['Nom de famille'] ?? r['Nom'] ?? r['NOM'] ?? '').trim();
+      const prenom = String(r['Prénom'] ?? r['Prenom'] ?? '').trim();
+      if (!nom && !prenom) return;                                   // ligne vide
+      const dateNaissance = this._normaliserDate(
+        r['Date Naissance'] ?? r['Date de naissance'] ?? r['Date naissance'] ?? r['Né(e) le'] ?? '');
+
+      if (this.trouverCandidat(nom, prenom, dateNaissance)) { ignores++; return; }   // doublon
+
+      const c = this.addCandidat({
+        nom, prenom,
+        sexe        : r['Sexe'] ?? '',
+        dateNaissance,
+        classe      : r['Classe'] ?? r['Division'] ?? '',
+        option1: r['Option1'] ?? r['Option 1'] ?? '',
+        option2: r['Option2'] ?? r['Option 2'] ?? '',
+        option3: r['Option3'] ?? r['Option 3'] ?? '',
+        option4: r['Option4'] ?? r['Option 4'] ?? '',
+        option5: r['Option5'] ?? r['Option 5'] ?? '',
+        option6: r['Option6'] ?? r['Option 6'] ?? '',
+      });
+
+      const txtAmen = String(r['Aménagements'] ?? r['Amenagements'] ?? '').trim();
+      if (txtAmen) {
+        // Fiche aménagement reliée : l'algorithme et les impressions continuent de lire
+        // amenagements[] sans modification. RGPD : libellé court « NOM P. ».
+        const am = this.addAmenagement({
+          candidat: `${nom} ${prenom.slice(0, 1)}${prenom ? '.' : ''}`.trim(),
+          classe  : c.classe,
+          autre   : txtAmen,
+        });
+        c.amenagementId = am.id;
+        amen++;
+      }
+      ajoutes++;
+    });
+    this._sortCandidats();
+    return { ajoutes, ignores, amenagements: amen };
   },
 
   // ────────────────────────────────────────────────────────────
@@ -741,6 +932,7 @@ const AppData = {
       epreuves: this.epreuves,
       salles: this.salles,
       amenagements: this.amenagements,
+      candidats: this.candidats,
       surveillants: this.surveillants,
       affectations: this.affectations,
       reserves: this.reserves,
@@ -759,6 +951,7 @@ const AppData = {
     this.epreuves = obj.epreuves || [];
     this.salles = obj.salles || [];
     this.amenagements = obj.amenagements || [];
+    this.candidats = obj.candidats || [];
     this.surveillants = obj.surveillants || [];
     this.affectations = obj.affectations || {};
     this.reserves = obj.reserves || {};
@@ -770,6 +963,7 @@ const AppData = {
     this._nextId = { ...this._nextId, ...(obj._nextId || {}) };
     this._sortEpreuves();
     this._sortSurveillants();
+    this._sortCandidats();
   },
 
   exporterJSON() {
@@ -812,6 +1006,39 @@ const AppData = {
       ['101', 'ordinaire', 30, 28, 2, ''],
     ]);
     XLSX.utils.book_append_sheet(wb, wsSa, 'Salles');
+
+    // Feuille Élèves (module candidats) — colonnes alignées sur un export SIECLE,
+    // enrichies de Classe et d'options jusqu'à 6 (spécialités + LV + options facultatives d'un lycée).
+    const wsE = XLSX.utils.aoa_to_sheet([
+      ['Sexe', 'Nom de famille', 'Prénom', 'Date Naissance', 'Classe', 'Aménagements',
+       'Option1', 'Option2', 'Option3', 'Option4', 'Option5', 'Option6'],
+      ['F', 'MARTIN', 'Léa', '12/05/2008', 'TG1', 'Tiers temps',
+       'Mathématiques', 'Physique-Chimie', 'SES', 'LVA Anglais', 'LVB Espagnol', 'Maths complémentaires'],
+      ['M', 'DURAND', 'Hugo', '03/11/2008', 'TG2', '',
+       'HGGSP', 'SES', 'LLCER Anglais', 'LVA Anglais', 'LVB Allemand', ''],
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsE, 'Élèves');
+
+    // Feuille Notice — repères d'usage et RGPD pour le personnel de direction
+    const wsN = XLSX.utils.aoa_to_sheet([
+      ['Orga Examens — modèle d\u2019import'],
+      [''],
+      ['Feuille « Surveillants » : une colonne de disponibilité par épreuve (O = disponible).'],
+      ['Feuille « Salles » : « Candidats » = effectif prévu ; sert au calcul du matériel.'],
+      ['Feuille « Élèves » : liste nominative des candidats (examens blancs notamment).'],
+      [''],
+      ['Élèves — règles :'],
+      ['• Seuls Nom de famille et Prénom sont requis ; les autres colonnes sont facultatives.'],
+      ['• Date Naissance : JJ/MM/AAAA (sert au dédoublonnage nom+prénom+date, faute d\u2019INE).'],
+      ['• Aménagements : texte libre ; crée automatiquement une fiche dans l\u2019onglet Aménagements.'],
+      ['• Option1 à Option6 : libellés libres (spécialités, LV, options). L\u2019appli les découvre'],
+      ['  et permet de relier chaque épreuve aux options concernées — aucune nomenclature figée.'],
+      ['• Colonnes ignorées si vides. Réimporter le même fichier ne crée pas de doublon.'],
+      [''],
+      ['RGPD : données traitées localement sur ce poste, jamais transmises. À conserver le temps'],
+      ['de la session puis à purger (bouton « Purger les candidats » dans l\u2019onglet Candidats).'],
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsN, 'Notice');
 
     XLSX.writeFile(wb, 'OrgaExamens_modele.xlsx');
   },
@@ -869,7 +1096,16 @@ const AppData = {
           });
         }
 
-        onDone(null, { nbS, nbSa });
+        // ── Élèves / Candidats ──
+        let nbC = 0, nbCign = 0, nbCam = 0;
+        const wsE = wb.Sheets['Élèves'] || wb.Sheets['Eleves'] || wb.Sheets['Candidats'];
+        if (wsE) {
+          const rows = XLSX.utils.sheet_to_json(wsE, { defval: '' });
+          const res = this.importerCandidatsRows(rows);
+          nbC = res.ajoutes; nbCign = res.ignores; nbCam = res.amenagements;
+        }
+
+        onDone(null, { nbS, nbSa, nbC, nbCign, nbCam });
       } catch (err) { onDone(err); }
     };
     reader.readAsArrayBuffer(file);

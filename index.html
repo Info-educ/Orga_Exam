@@ -31,6 +31,9 @@
         <button class="nav-item active" role="tab" data-tab="epreuves" aria-selected="true">
           <span class="nav-item-icon">📅</span><span class="nav-item-label">Épreuves</span>
         </button>
+        <button class="nav-item" role="tab" data-tab="candidats" aria-selected="false">
+          <span class="nav-item-icon">🎓</span><span class="nav-item-label">Candidats</span>
+        </button>
         <button class="nav-item" role="tab" data-tab="salles" aria-selected="false">
           <span class="nav-item-icon">🚪</span><span class="nav-item-label">Salles &amp; besoins</span>
         </button>
@@ -99,6 +102,36 @@
               <thead><tr><th>#</th><th>Matière</th><th>Début</th><th>Durée</th><th>Fin</th><th>Fin tiers temps</th><th class="col-actions">Actions</th></tr></thead>
               <tbody id="tbody-epreuves"></tbody>
             </table>
+          </div>
+        </section>
+
+        <!-- ═══ ONGLET CANDIDATS ═══ -->
+        <section class="tab-panel" id="tab-candidats" hidden>
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">🎓 Candidats</h2>
+              <p class="section-desc">Liste nominative (examens blancs notamment). Import depuis un fichier Excel — feuille « Élèves ». RGPD : données locales, à purger en fin de session.</p>
+            </div>
+            <div class="header-actions">
+              <button class="btn btn-outline" id="btn-cand-modele" title="Télécharger le modèle Excel vierge">⬇ Modèle Excel</button>
+              <button class="btn btn-primary" id="btn-cand-import">⬆ Importer (Excel)</button>
+            </div>
+          </div>
+          <div class="toolbar">
+            <div class="search-box"><span class="search-icon">🔎</span>
+              <input type="text" id="search-candidats" placeholder="Rechercher un candidat, une classe, une option…">
+            </div>
+            <span class="counter-label"><span id="count-candidats">0</span> candidat(s)</span>
+          </div>
+          <div class="stats-bar" id="stat-candidats"></div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr><th>#</th><th>Candidat</th><th>Sexe</th><th>Classe</th><th>Options</th><th>Né(e) le</th><th class="col-actions">Actions</th></tr></thead>
+              <tbody id="tbody-candidats"></tbody>
+            </table>
+          </div>
+          <div class="section-footer" style="margin-top:1rem">
+            <button class="btn btn-outline btn-danger" id="btn-cand-purge" title="Supprimer toute la liste">🗑 Purger les candidats</button>
           </div>
         </section>
 
@@ -665,6 +698,7 @@
   <script src="js/repartition.js"></script>
   <script src="js/recap.js"></script>
   <script src="js/print.js"></script>
+  <script src="js/candidats.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

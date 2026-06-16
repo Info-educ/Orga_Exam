@@ -147,6 +147,7 @@ const UI = {
     switch (tab) {
       case 'epreuves':     Parametres.rendreEpreuves(); break;
       case 'salles':       Salles.rendre(); break;
+      case 'candidats':    Candidats.rendre(); break;
       case 'amenagements': Salles.rendreAmenagements(); break;
       case 'surveillants': Surveillants.rendre(); break;
       case 'repartition':  Repartition.rendre(); break;
@@ -198,7 +199,13 @@ const UI = {
         notifier('Astuce : définissez les épreuves avant l\u2019import pour récupérer les disponibilités.', 'info', 7000);
       AppData.importerExcel(file, (err, res) => {
         if (err) { notifier('Import impossible : ' + escHtml(err.message), 'error'); return; }
-        notifier(`Import terminé : ${res.nbS} surveillant(s), ${res.nbSa} salle(s).`);
+        let msg = `Import terminé : ${res.nbS} surveillant(s), ${res.nbSa} salle(s)`;
+        if (res.nbC || res.nbCign) {
+          msg += `, ${res.nbC} candidat(s)`;
+          if (res.nbCam) msg += ` (dont ${res.nbCam} avec aménagement)`;
+          if (res.nbCign) msg += `, ${res.nbCign} doublon(s) ignoré(s)`;
+        }
+        notifier(msg + '.');
         Unsaved.marquer();
         UI.rafraichirTout();
       });
