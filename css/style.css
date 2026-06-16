@@ -2427,12 +2427,56 @@ div.modal-wide { max-width: 780px; }
 }
 .sidebar-btn-tour:hover { background: #dcfce7; }
 
+/* ── Bouton « ? » flottant permanent + menu ─────────────────────── */
+#tuto-fab {
+  position: fixed; right: 22px; bottom: 22px;
+  width: 52px; height: 52px;
+  border-radius: 50%; border: none;
+  background: var(--tuto-primary); color: #fff;
+  font-size: 1.5rem; font-weight: 700; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(37,99,235,.40);
+  z-index: 8000;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, transform .15s, box-shadow .15s;
+}
+#tuto-fab:hover { background: var(--tuto-primary-h); transform: translateY(-2px); }
+#tuto-fab:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+
+#tuto-fab-menu {
+  position: fixed; right: 22px; bottom: 84px;
+  background: var(--tuto-bg);
+  border: 1px solid var(--tuto-border);
+  border-radius: 12px;
+  box-shadow: var(--tuto-shadow);
+  padding: 6px;
+  z-index: 8001;
+  display: none; flex-direction: column; min-width: 220px;
+  animation: tuto-slide-in .16s ease;
+}
+#tuto-fab-menu.open { display: flex; }
+#tuto-fab-menu button {
+  background: none; border: none; text-align: left;
+  padding: 10px 12px; border-radius: 8px; cursor: pointer;
+  font-size: .88rem; color: var(--tuto-text);
+  transition: background .12s;
+}
+#tuto-fab-menu button:hover { background: #f1f5f9; }
+
+/* ── Accessibilité : respect des préférences de mouvement réduit ─── */
+@media (prefers-reduced-motion: reduce) {
+  .tuto-modal, .tuto-welcome-box, #tuto-tour-bubble,
+  .tuto-bandeau, #tuto-fab-menu { animation: none !important; }
+  .tuto-spotlight-target { animation: none !important; }
+}
+
 /* ── Masquer à l'impression ─────────────────────────────────────── */
 @media print {
   #tuto-modal-overlay,
   #tuto-welcome-overlay,
   #tuto-tour-overlay,
   #tuto-tour-bubble,
+  #tuto-fab,
+  #tuto-fab-menu,
   .tuto-bandeau,
   .btn-tab-help,
   .sidebar-btn-help,
