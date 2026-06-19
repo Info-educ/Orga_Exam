@@ -132,6 +132,7 @@ const Recap = {
       const avecReserveTT = !!(AppData.getReserveTT(ep.id).length || AppData.params.nbReservesTT);
       const span = salles.length + (avecReserve ? 1 : 0) + (avecReserveTT ? 1 : 0);
       salles.forEach((salle, i) => {
+        const debut = AppData.heureDebutSalle(ep, salle);
         const fin = AppData.heureFinSalle(ep, salle);
         const chips = AppData.getAffectes(ep.id, salle.id).map(id => {
           const s = AppData.getSurveillant(id);
@@ -143,7 +144,7 @@ const Recap = {
         html += `<tr>
           ${i === 0 ? `<td rowspan="${span}">${escHtml(AppData.formatDateCourt(ep.date))}</td>
                        <td rowspan="${span}"><strong>${escHtml(ep.matiere)}</strong></td>` : ''}
-          <td>${ep.heureDebut}–${fin}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}${salle.type === 'secretariat' ? ' <span class="badge badge-secr">Secr.</span>' : ''}</td>
+          <td>${debut}–${fin}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}${salle.type === 'secretariat' ? ' <span class="badge badge-secr">Secr.</span>' : ''}</td>
           <td>${escHtml(salle.nom)}</td>
           <td class="text-center">${salle.candidats || '—'}</td>
           <td class="dnd-zone" data-drop='${attrJson({ ep: ep.id, salle: salle.id })}'>${chips}</td>
@@ -158,7 +159,7 @@ const Recap = {
           return `<span class="surv-chip chip-tt ${verrou ? 'locked' : ''}" draggable="${verrou ? 'false' : 'true'}" ${verrou ? '' : `data-dnd='${dnd}'`} title="${verrou ? 'Affectation figée' : 'Glisser pour déplacer ou échanger'}">${verrou ? '📌 ' : ''}⏳ ${escHtml(s.nom)} ${escHtml(s.prenom)}</span>`;
         }).filter(Boolean).join(' ');
         html += `<tr class="row-reserve-tt">
-          <td>${ep.heureDebut}–${AppData.heureFinTT(ep)}</td>
+          <td>${AppData.heureDebutTT(ep)}–${AppData.heureFinTT(ep)}</td>
           <td>🛟⏳ Réserve tiers temps</td>
           <td class="text-center">—</td>
           <td class="dnd-zone" data-drop='${attrJson({ ep: ep.id, reserveTT: true })}'>${resTTChips || '<span class="calc-attente">Personne</span>'}</td>
@@ -219,6 +220,7 @@ const Recap = {
       html += `<div class="table-wrapper"><table class="data-table">
         <thead><tr><th>Date</th><th>Épreuve</th><th>Horaires</th><th>Surveillants</th></tr></thead><tbody>`;
       eps.forEach(ep => {
+        const debut = AppData.heureDebutSalle(ep, salle);
         const fin = AppData.heureFinSalle(ep, salle);
         const affectes = AppData.getAffectes(ep.id, salle.id);
         const noms = affectes
@@ -228,7 +230,7 @@ const Recap = {
         html += `<tr>
           <td>${escHtml(AppData.formatDateCourt(ep.date))}</td>
           <td><strong>${escHtml(ep.matiere)}</strong></td>
-          <td>${ep.heureDebut}–${fin}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}</td>
+          <td>${debut}–${fin}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}</td>
           <td>${noms || ''}${manque > 0 ? ` <span class="badge badge-prio">${manque} manquant(s)</span>` : ''}</td>
         </tr>`;
       });
@@ -260,7 +262,7 @@ const Recap = {
           creneaux.push({ ep, salle: null, duree: ep.duree, reserve: true });
         }
         if (AppData.estEnReserveTT(ep.id, sv.id)) {
-          creneaux.push({ ep, salle: null, duree: AppData.dureeTiersTemps(ep.duree), reserveTT: true });
+          creneaux.push({ ep, salle: null, duree: AppData.dureeTTEpreuve(ep), reserveTT: true });
         }
         AppData.creneauxCouloirDe(ep, sv.id).forEach(cc => {
           creneaux.push({ ep, salle: null, duree: cc.duree, couloir: cc });
@@ -542,7 +544,7 @@ const Recap = {
             <td class="text-center">${crs.length}</td>
             <td class="text-center"><strong>${AppData.formatDuree(minutes)}</strong></td>
             <td style="font-size:.82rem">${crs.map(c =>
-              `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — ${escHtml(c.salle.nom)} (${c.ep.heureDebut}–${AppData.heureFinSalle(c.ep, c.salle)})`).join('<br>')}</td>
+              `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — ${escHtml(c.salle.nom)} (${AppData.heureDebutSalle(c.ep, c.salle)}–${AppData.heureFinSalle(c.ep, c.salle)})`).join('<br>')}</td>
           </tr>`;
         });
       html += '</tbody></table></div>';
@@ -570,7 +572,7 @@ const Recap = {
           <div class="jury-card-header">
             <strong>${escHtml(ep.matiere)} — ${escHtml(salle.nom)}</strong>
             <span class="jury-card-meta">${escHtml(AppData.formatDateCourt(ep.date))} ·
-              ${ep.heureDebut}–${AppData.heureFinSalle(ep, salle)} <span class="badge badge-tt">fin TT${AppData.params.margeSecr ? ' + ' + AppData.params.margeSecr + ' min' : ''}</span>
+              ${AppData.heureDebutSalle(ep, salle)}–${AppData.heureFinSalle(ep, salle)} <span class="badge badge-tt">fin TT${AppData.params.margeSecr ? ' + ' + AppData.params.margeSecr + ' min' : ''}</span>
               ${manque > 0 ? `<span class="badge badge-prio">${manque} manquant(s)</span>` : `<span class="badge badge-secr">${affectes.length}/${salle.nbSurveillants}</span>`}</span>
           </div>
           <div style="padding:12px 16px">

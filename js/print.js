@@ -305,12 +305,13 @@ const Impressions = {
         <tr><th>Épreuve</th><th>Horaires</th><th>Salle</th><th>Candidats</th><th>Surveillants</th></tr>`;
       AppData.epreuves.filter(e => e.date === jour).forEach(ep => {
         AppData.sallesPourEpreuve(ep.id).forEach(salle => {
+          const debut = AppData.heureDebutSalle(ep, salle);
           const fin = AppData.heureFinSalle(ep, salle);
           const noms = AppData.getAffectes(ep.id, salle.id)
             .map(id => { const s = AppData.getSurveillant(id); return s ? `${escHtml(s.nom)} ${escHtml(s.prenom)}` : ''; })
             .filter(Boolean).join(', ') || '<span class="badge badge-warn">Non pourvu</span>';
           corps += `<tr><td><strong>${escHtml(ep.matiere)}</strong></td>
-            <td>${ep.heureDebut}–${fin}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}${salle.type === 'secretariat' ? ' <span class="badge badge-tt">Secrétariat</span>' : ''}</td>
+            <td>${debut}–${fin}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}${salle.type === 'secretariat' ? ' <span class="badge badge-tt">Secrétariat</span>' : ''}</td>
             <td>${escHtml(salle.nom)}</td><td>${salle.type === 'secretariat' ? '—' : (salle.candidats || '—')}</td><td>${noms}</td></tr>`;
         });
       });
@@ -344,7 +345,7 @@ const Impressions = {
                 ? `🗂 Secrétariat — ${escHtml(salle.nom)} <span class="badge badge-tt">jusqu\u2019à fin TT${AppData.params.margeSecr ? ' + ' + AppData.params.margeSecr + ' min' : ''}</span>`
                 : `Salle ${escHtml(salle.nom)}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">Tiers temps</span>' : ''}`,
               presence: `<strong>${AppData.addMinutes(ep.heureDebut, -delai)}</strong> <small>(${delai} min avant)</small>`,
-              debut: ep.heureDebut,
+              debut: AppData.heureDebutSalle(ep, salle),
               fin: AppData.heureFinSalle(ep, salle),
             });
           }
@@ -363,7 +364,7 @@ const Impressions = {
             ep, tri: ep.date + ep.heureDebut,
             poste: '🛟⏳ Réserve tiers temps <span class="badge badge-tt">présence jusqu\u2019à la fin du TT</span>',
             presence: `<strong>${AppData.addMinutes(ep.heureDebut, -c.minutesAvant)}</strong> <small>(${c.minutesAvant} min avant)</small>`,
-            debut: ep.heureDebut,
+            debut: AppData.heureDebutTT(ep),
             fin: AppData.heureFinTT(ep),
           });
         }
@@ -450,7 +451,7 @@ const Impressions = {
         <div class="salle">Salle ${escHtml(salle.nom)}</div>
         ${salle.type === 'amenagee' ? '<div class="detail">♿ Salle aménagée — temps majoré</div>' : ''}${salle.type === 'secretariat' ? '<div class="detail">🗂 Secrétariat d\\u2019examen — présence jusqu\\u2019à la fin du tiers temps</div>' : ''}
         <div class="sep"></div>
-        ${eps.map(ep => `<div class="detail"><strong>${escHtml(ep.matiere)}</strong> — ${escHtml(AppData.formatDateCourt(ep.date))} · ${ep.heureDebut}–${AppData.heureFinSalle(ep, salle)}</div>`).join('')}
+        ${eps.map(ep => `<div class="detail"><strong>${escHtml(ep.matiere)}</strong> — ${escHtml(AppData.formatDateCourt(ep.date))} · ${AppData.heureDebutSalle(ep, salle)}–${AppData.heureFinSalle(ep, salle)}</div>`).join('')}
         <div class="sep"></div>
         <div class="detail">Silence — Épreuve en cours</div>
       </div></div>`;
@@ -604,8 +605,8 @@ const Impressions = {
         <td>${escHtml(AppData.formatDateCourt(ep.date))}</td>
         <td><strong>${escHtml(ep.matiere)}</strong></td>
         <td>${escHtml(salle.nom)}</td>
-        <td><strong>${AppData.addMinutes(ep.heureDebut, -c.minutesAvantSecr)}</strong><br><small>(${c.minutesAvantSecr} min avant)</small></td>
-        <td>${ep.heureDebut}</td>
+        <td><strong>${AppData.addMinutes(AppData.heureDebutSalle(ep, salle), -c.minutesAvantSecr)}</strong><br><small>(${c.minutesAvantSecr} min avant)</small></td>
+        <td>${AppData.heureDebutSalle(ep, salle)}</td>
         <td><strong>${AppData.heureFinSalle(ep, salle)}</strong><br><span class="badge badge-tt">fin TT${AppData.params.margeSecr ? ' + ' + AppData.params.margeSecr + ' min' : ''}</span></td>
         <td>${AppData.formatDuree(AppData.dureeCreneau(ep, salle))}</td>
         <td>${noms}</td>
@@ -649,8 +650,8 @@ const Impressions = {
               <td>${escHtml(AppData.formatDate(ep.date))}</td>
               <td><strong>${escHtml(ep.matiere)}</strong></td>
               <td><strong>${escHtml(salle.nom)}</strong></td>
-              <td><strong>${AppData.addMinutes(ep.heureDebut, -c.minutesAvantSecr)}</strong> <small>(${c.minutesAvantSecr} min avant)</small></td>
-              <td>${ep.heureDebut}</td>
+              <td><strong>${AppData.addMinutes(AppData.heureDebutSalle(ep, salle), -c.minutesAvantSecr)}</strong> <small>(${c.minutesAvantSecr} min avant)</small></td>
+              <td>${AppData.heureDebutSalle(ep, salle)}</td>
               <td><strong>${AppData.heureFinSalle(ep, salle)}</strong></td>
               <td>${AppData.formatDuree(AppData.dureeCreneau(ep, salle))}</td>
             </tr>`).join('')}
@@ -742,7 +743,7 @@ const Impressions = {
             ${eps.map(ep => `<tr>
               <td>${escHtml(AppData.formatDateCourt(ep.date))}</td>
               <td><strong>${escHtml(ep.matiere)}</strong></td>
-              <td>${ep.heureDebut}</td>
+              <td>${AppData.heureDebutSalle(ep, salle)}</td>
               <td>${AppData.heureFinSalle(ep, salle)}</td>
             </tr>`).join('')}
           </table>`;

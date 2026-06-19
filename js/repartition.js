@@ -179,7 +179,7 @@ const Repartition = {
         const elu = choisir(ep);
         if (!elu) { manquants += besoinTT; break; }
         AppData.mettreEnReserveTT(ep.id, elu.id);
-        charge[elu.id].minutes += AppData.dureeTiersTemps(ep.duree);
+        charge[elu.id].minutes += AppData.dureeTTEpreuve(ep);
         charge[elu.id].creneaux++;
         pourvus++; besoinTT--;
       }
@@ -363,7 +363,7 @@ const Repartition = {
         lignes += `
           <tr class="row-reserve-tt">
             <td><strong>🛟⏳ Réserve tiers temps</strong>
-              <small style="display:block;color:var(--gray-500)">${nbResTT} souhaité(s) · présence jusqu\u2019à ${AppData.heureFinTT(ep)} (${AppData.formatDuree(AppData.dureeTiersTemps(ep.duree))})</small></td>
+              <small style="display:block;color:var(--gray-500)">${nbResTT} souhaité(s) · présence de ${AppData.heureDebutTT(ep)} à ${AppData.heureFinTT(ep)} (${AppData.formatDuree(AppData.dureeTTEpreuve(ep))})</small></td>
             <td class="dnd-zone" data-drop='${attrJson({ ep: ep.id, reserveTT: true })}'>
               ${this._chips(ep, 'RT', enReserveTT)}
               ${this._badgeManque(nbResTT - enReserveTT.length)}
@@ -452,7 +452,7 @@ const Repartition = {
         if (salle && salle.type === 'secretariat') mSecr += d; else mSalle += d;
       });
       if (AppData.estEnReserve(ep.id, survId))   mReserve   += ep.duree;
-      if (AppData.estEnReserveTT(ep.id, survId)) mReserveTT += AppData.dureeTiersTemps(ep.duree);
+      if (AppData.estEnReserveTT(ep.id, survId)) mReserveTT += AppData.dureeTTEpreuve(ep);
       AppData.creneauxCouloirDe(ep, survId).forEach(cc => { mCouloir += cc.duree; });
     });
     const parts = [];

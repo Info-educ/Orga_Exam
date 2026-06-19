@@ -93,6 +93,24 @@ const AppData = {
     return Math.ceil((duree * 4 / 3) / 5) * 5;
   },
 
+  /** Nombre de minutes entre deux heures 'HH:MM' (b - a). */
+  diffMinutes(a, b) {
+    if (!a || !b) return 0;
+    const [ha, ma] = a.split(':').map(Number);
+    const [hb, mb] = b.split(':').map(Number);
+    return (hb * 60 + mb) - (ha * 60 + ma);
+  },
+
+  /** Durée du tiers temps en minutes pour une épreuve :
+   *  plage réelle (début TT → fin TT) si des horaires manuels sont saisis,
+   *  sinon la durée ×4/3 calculée. */
+  dureeTTEpreuve(ep) {
+    if (ep && (ep.ttDebut || ep.ttFin)) {
+      return this.diffMinutes(this.heureDebutTT(ep), this.heureFinTT(ep));
+    }
+    return this.dureeTiersTemps(ep.duree);
+  },
+
   /** Durée en min → "2h30" */
   formatDuree(min) {
     const h = Math.floor(min / 60), m = min % 60;
@@ -846,6 +864,14 @@ const AppData = {
     return !!salle && (salle.type === 'amenagee' || salle.type === 'secretariat');
   },
 
+  /** Heure de début effective pour l'équipe d'une salle.
+   *  Salles aménagées et secrétariat : début du tiers temps (peut être décalé
+   *  pour les épreuves qui s'enchaînent). Salles ordinaires : début de l'épreuve. */
+  heureDebutSalle(ep, salle) {
+    if (salle && this.estHoraireTT(salle)) return this.heureDebutTT(ep);
+    return ep.heureDebut;
+  },
+
   /** Heure de fin effective pour l'équipe d'une salle.
    *  Secrétariat : fin du tiers temps + marge (retour des copies, vérifications). */
   heureFinSalle(ep, salle) {
@@ -860,8 +886,8 @@ const AppData = {
   dureeCreneau(ep, salle) {
     if (!salle) return ep.duree;
     if (salle.type === 'secretariat')
-      return this.dureeTiersTemps(ep.duree) + (this.params.margeSecr || 0);
-    if (salle.type === 'amenagee') return this.dureeTiersTemps(ep.duree);
+      return this.dureeTTEpreuve(ep) + (this.params.margeSecr || 0);
+    if (salle.type === 'amenagee') return this.dureeTTEpreuve(ep);
     return ep.duree;
   },
 
