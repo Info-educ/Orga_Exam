@@ -20,6 +20,8 @@ const Parametres = {
     $('#form-epreuve').addEventListener('submit', (e) => { e.preventDefault(); this.enregistrerEpreuve(); });
     ['ep-debut', 'ep-duree'].forEach(id =>
       $('#' + id).addEventListener('input', () => this._majApercuHoraires()));
+    ['ep-tt-debut', 'ep-tt-fin'].forEach(id =>
+      $('#' + id).addEventListener('input', () => this._majApercuHoraires()));
   },
 
   ouvrir() {
@@ -74,6 +76,13 @@ const Parametres = {
     $('#ep-matiere').value = ep ? ep.matiere : '';
     $('#ep-debut').value = ep ? ep.heureDebut : '09:00';
     $('#ep-duree').value = ep ? ep.duree : 120;
+    // Champs tiers temps : valeur saisie si présente, sinon valeur calculée (modifiable)
+    $('#ep-tt-debut').value = ep && ep.ttDebut ? ep.ttDebut : (ep ? ep.heureDebut : '09:00');
+    $('#ep-tt-fin').value = ep && ep.ttFin
+      ? ep.ttFin
+      : AppData.addMinutes(
+          ep && ep.ttDebut ? ep.ttDebut : (ep ? ep.heureDebut : '09:00'),
+          AppData.dureeTiersTemps(ep ? ep.duree : 120));
     $('#ep-notes').value = ep ? ep.notes : '';
     this._majApercuHoraires();
     ouvrirModal('modal-epreuve');
@@ -82,18 +91,41 @@ const Parametres = {
   _majApercuHoraires() {
     const debut = $('#ep-debut').value, duree = parseInt($('#ep-duree').value, 10) || 0;
     const fin = AppData.addMinutes(debut, duree);
-    const finTT = AppData.addMinutes(debut, AppData.dureeTiersTemps(duree));
+    const ttDebut = $('#ep-tt-debut').value || debut;
+    const ttFin = $('#ep-tt-fin').value || AppData.addMinutes(ttDebut, AppData.dureeTiersTemps(duree));
     $('#ep-apercu').innerHTML = duree
-      ? `Fin de l\u2019épreuve : <strong>${fin}</strong> · Fin avec tiers temps : <strong>${finTT}</strong> (${AppData.formatDuree(AppData.dureeTiersTemps(duree))})`
+      ? `Fin de l\u2019épreuve : <strong>${fin}</strong> · Tiers temps : <strong>${ttDebut} → ${ttFin}</strong>`
+        + ` <button type="button" class="btn-link" id="ep-tt-reset">↺ recalculer auto</button>`
       : '';
+    const reset = $('#ep-tt-reset');
+    if (reset) reset.addEventListener('click', () => {
+      $('#ep-tt-debut').value = $('#ep-debut').value;
+      $('#ep-tt-fin').value = AppData.addMinutes(
+        $('#ep-debut').value, AppData.dureeTiersTemps(parseInt($('#ep-duree').value, 10) || 0));
+      this._majApercuHoraires();
+    });
   },
 
   enregistrerEpreuve() {
+    const debut = $('#ep-debut').value;
+    const duree = $('#ep-duree').value;
+    const ttDebutSaisi = $('#ep-tt-debut').value;
+    const ttFinSaisi = $('#ep-tt-fin').value;
+    // Valeurs auto de référence
+    const autoDebut = debut;
+    const autoFin = AppData.addMinutes(
+      ttDebutSaisi || debut, AppData.dureeTiersTemps(parseInt(duree, 10) || 0));
+    // On ne mémorise un horaire TT que s'il diffère du calcul automatique
+    const ttDebut = (ttDebutSaisi && ttDebutSaisi !== autoDebut) ? ttDebutSaisi : '';
+    const ttFin = (ttFinSaisi && ttFinSaisi !== autoFin) ? ttFinSaisi : '';
+
     const f = {
       date: $('#ep-date').value,
       matiere: $('#ep-matiere').value,
-      heureDebut: $('#ep-debut').value,
-      duree: $('#ep-duree').value,
+      heureDebut: debut,
+      duree: duree,
+      ttDebut: ttDebut,
+      ttFin: ttFin,
       notes: $('#ep-notes').value,
     };
     if (!f.date || !f.matiere.trim()) { notifier('Date et matière sont obligatoires.', 'error'); return; }
@@ -141,7 +173,7 @@ const Parametres = {
           <td>${ep.heureDebut}</td>
           <td>${AppData.formatDuree(ep.duree)}</td>
           <td>${AppData.heureFin(ep)}</td>
-          <td><span class="badge badge-tt">⏱ ${AppData.heureFinTT(ep)}</span></td>
+          <td><span class="badge badge-tt">⏱ ${AppData.heureDebutTT(ep)}–${AppData.heureFinTT(ep)}</span></td>
           <td class="col-actions">
             <button class="btn btn-icon btn-edit" data-edit="${ep.id}" title="Modifier">✏</button>
             <button class="btn btn-icon btn-del" data-del="${ep.id}" title="Supprimer">🗑</button>

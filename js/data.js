@@ -110,6 +110,8 @@ const AppData = {
       matiere    : (f.matiere || '').trim(),
       heureDebut : f.heureDebut || '09:00',
       duree      : parseInt(f.duree, 10) || 60,
+      ttDebut    : (f.ttDebut || '').trim() || null,
+      ttFin      : (f.ttFin || '').trim() || null,
       notes      : (f.notes || '').trim(),
     };
     this.epreuves.push(e);
@@ -124,6 +126,8 @@ const AppData = {
     e.matiere = (f.matiere || '').trim();
     e.heureDebut = f.heureDebut || e.heureDebut;
     e.duree = parseInt(f.duree, 10) || e.duree;
+    e.ttDebut = (f.ttDebut || '').trim() || null;
+    e.ttFin = (f.ttFin || '').trim() || null;
     e.notes = (f.notes || '').trim();
     this._sortEpreuves();
     return e;
@@ -157,7 +161,16 @@ const AppData = {
   },
 
   heureFin(ep)   { return this.addMinutes(ep.heureDebut, ep.duree); },
-  heureFinTT(ep) { return this.addMinutes(ep.heureDebut, this.dureeTiersTemps(ep.duree)); },
+
+  /** Heure de début du tiers temps : valeur saisie manuellement, sinon heure de début de l'épreuve. */
+  heureDebutTT(ep) { return (ep && ep.ttDebut) ? ep.ttDebut : ep.heureDebut; },
+
+  /** Heure de fin du tiers temps : valeur saisie manuellement si présente ;
+   *  sinon (début TT) + durée tiers temps. */
+  heureFinTT(ep) {
+    if (ep && ep.ttFin) return ep.ttFin;
+    return this.addMinutes(this.heureDebutTT(ep), this.dureeTiersTemps(ep.duree));
+  },
 
   /** Jours distincts triés */
   jours() { return [...new Set(this.epreuves.map(e => e.date))].sort(); },
@@ -948,7 +961,9 @@ const AppData = {
   fromJSON(obj) {
     if (!obj || obj.app !== 'orga-examens') throw new Error('Fichier de session non reconnu.');
     this.params = { ...this.params, ...(obj.params || {}) };
-    this.epreuves = obj.epreuves || [];
+    this.epreuves = (obj.epreuves || []).map(e => ({
+      ttDebut: null, ttFin: null, ...e,
+    }));
     this.salles = obj.salles || [];
     this.amenagements = obj.amenagements || [];
     this.candidats = obj.candidats || [];

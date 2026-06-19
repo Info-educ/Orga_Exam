@@ -74,7 +74,7 @@
       faire: 'Ajoutez chaque épreuve : matière, date, heure de début et durée.',
       pourquoi: 'C\u2019est la base de tout : salles, surveillants et plannings en découlent.',
       pasfait: 'Ne crée pas les convocations : ça se fait plus tard dans « Impressions ».',
-      bloque: 'La fin en ×4/3 se calcule seule : ne la saisissez pas à la main.'
+      bloque: 'La fin en ×4/3 se calcule seule. Vous pouvez l\u2019ajuster à la main (début/fin du tiers temps) pour les épreuves qui s\u2019enchaînent, comme le Français du DNB.'
     },
     salles: {
       titre: '🚪 Salles & besoins',
