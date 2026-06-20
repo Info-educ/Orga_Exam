@@ -716,7 +716,7 @@ const Impressions = {
             ${missionsEp.map(c => `<tr>
               <td>${escHtml(AppData.formatDateCourt(c.ep.date))}</td>
               <td><strong>${escHtml(c.ep.matiere)}</strong></td>
-              <td>${c.ep.heureDebut}</td>
+              <td>${AppData.heureDebutTT(c.ep)}</td>
               <td>${AppData.heureFinTT(c.ep)}</td>
               <td>${AppData.formatDuree(c.duree)}</td>
             </tr>`).join('')}

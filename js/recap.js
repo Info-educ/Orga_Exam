@@ -635,15 +635,20 @@ const Recap = {
             <thead><tr><th>Date</th><th>Épreuve</th><th>Horaires</th><th>Mission</th><th class="text-center">Durée</th></tr></thead><tbody>
             ${e.creneaux
               .sort((x, y) => (x.ep.date + x.ep.heureDebut).localeCompare(y.ep.date + y.ep.heureDebut))
-              .map(c => `<tr>
+              .map(c => {
+                const debut = c.type === 'epreuve'
+                  ? AppData.heureDebutTT(c.ep)
+                  : AppData.heureDebutSalle(c.ep, c.salle);
+                return `<tr>
                 <td>${escHtml(AppData.formatDateCourt(c.ep.date))}</td>
                 <td><strong>${escHtml(c.ep.matiere)}</strong></td>
-                <td>${c.ep.heureDebut}–${AppData.addMinutes(c.ep.heureDebut, c.duree)}</td>
+                <td>${debut}–${AppData.addMinutes(debut, c.duree)}</td>
                 <td>${c.type === 'epreuve'
                   ? '<span class="badge badge-tt">Épreuve entière</span> ' + escHtml(c.detail)
                   : 'Candidat <strong>' + escHtml(c.detail) + '</strong>'}</td>
                 <td class="text-center"><strong>${AppData.formatDuree(c.duree)}</strong></td>
-              </tr>`).join('')}
+              </tr>`;
+              }).join('')}
           </tbody></table></div>
         </div>`;
       });

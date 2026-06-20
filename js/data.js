@@ -660,14 +660,14 @@ const AppData = {
         .forEach(ep => {
           const duree = this.dureeCreneau(ep, salle);
           const e = entree(nom);
-          e.creneaux.push({ ep, duree, type: 'candidat', detail: `${a.candidat} — salle ${salle.nom}` });
+          e.creneaux.push({ ep, salle, duree, type: 'candidat', detail: `${a.candidat} — salle ${salle.nom}` });
           e.minutes += duree;
         });
     });
 
     this.epreuves.forEach(ep => {
       this.getAccompagnantsEp(ep.id).forEach(nom => {
-        const duree = this.dureeTiersTemps(ep.duree);
+        const duree = this.dureeTTEpreuve(ep);
         const e = entree(nom);
         e.creneaux.push({ ep, duree, type: 'epreuve', detail: 'Épreuve entière (plusieurs candidats)' });
         e.minutes += duree;
