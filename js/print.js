@@ -30,6 +30,7 @@ const PrintConfig = {
       logoBase64      : d.logoBase64 || null,
       signatureBase64 : d.signatureBase64 || null,
       minutesAvant : d.minutesAvant !== undefined ? d.minutesAvant : 15,
+      minutesAvantCand : d.minutesAvantCand !== undefined ? d.minutesAvantCand : 20,
       minutesAvantSecr : d.minutesAvantSecr !== undefined ? d.minutesAvantSecr : 30,
       consignesSecr : d.consignesSecr || [
         `Présence en salle ${d.minutesAvantSecr !== undefined ? d.minutesAvantSecr : 30} minutes avant le début de l\u2019épreuve : préparation des postes (ordinateurs, sujets adaptés, copies, brouillons) et accueil des candidats.`,
@@ -96,6 +97,7 @@ const Impressions = {
     const c = PrintConfig.get();
     $('#pc-fonction').value = c.fonctionSign;
     $('#pc-minutes-avant').value = c.minutesAvant;
+    $('#pc-minutes-avant-cand').value = c.minutesAvantCand;
     $('#pc-minutes-avant-secr').value = c.minutesAvantSecr;
     $('#pc-genre').value = c.genreSign;
     $('#pc-nom').value = c.nomSign;
@@ -116,6 +118,7 @@ const Impressions = {
     PrintConfig.set({
       fonctionSign: $('#pc-fonction').value.trim(),
       minutesAvant: Math.max(0, parseInt($('#pc-minutes-avant').value, 10) || 0),
+      minutesAvantCand: Math.max(0, parseInt($('#pc-minutes-avant-cand').value, 10) || 0),
       minutesAvantSecr: Math.max(0, parseInt($('#pc-minutes-avant-secr').value, 10) || 0),
       genreSign: $('#pc-genre').value,
       nomSign: $('#pc-nom').value.trim(),
@@ -582,31 +585,35 @@ const Impressions = {
         .sort((x, y) => ((x.ep.date + x.ep.heureDebut)
           .localeCompare(y.ep.date + y.ep.heureDebut)));
 
+      // Numéro d'anonymat éventuel (identique sur toutes les épreuves dans la plupart
+      // des cas ; on prend le premier renseigné).
+      const numero = cand && cand.numerosAnonymat
+        ? (Object.values(cand.numerosAnonymat).find(Boolean) || '')
+        : '';
+
       corps += `<div class="page">${this._entete('Convocation individuelle du candidat')}
         <div class="bloc bloc-bleu" style="font-size:12pt">
-          <strong>${nom}</strong>${classe ? ` — classe ${escHtml(classe)}` : ''}<br>
+          ${numero ? `N° ${escHtml(numero)} — ` : ''}<strong>${nom}</strong>${classe ? ` — classe ${escHtml(classe)}` : ''}<br>
           <span class="badge badge-tt">Aménagements d\u2019épreuves accordés</span>
-          Présentez-vous <strong>${c.minutesAvant} minutes avant</strong> le début de chaque épreuve,
-          muni(e) d\u2019une pièce d\u2019identité et de votre convocation.
+          <div style="margin-top:6px">Vous devez vous présenter <strong>${c.minutesAvantCand} minutes avant</strong>
+          le début de chaque épreuve, muni(e) d\u2019une pièce d\u2019identité et de votre convocation.</div>
         </div>
 
         <h2>Vos épreuves</h2>
         <table>
-          <tr><th>Date</th><th>Épreuve</th><th>Salle</th><th>Convocation</th><th>Début</th><th>Fin${'\u00A0'}(tiers temps inclus)</th></tr>
+          <tr><th>Date</th><th>Épreuve</th><th>Salle</th><th>Début</th><th>Fin${'\u00A0'}(tiers temps inclus)</th></tr>
           ${rangs.length ? rangs.map(({ ep, salle }) => {
             const debut = salle ? AppData.heureDebutSalle(ep, salle) : ep.heureDebut;
             const fin   = salle ? AppData.heureFinSalle(ep, salle)   : AppData.heureFinTT(ep);
-            const conv  = AppData.addMinutes(debut, -c.minutesAvant);
             const tt    = (!salle || AppData.estHoraireTT(salle)) ? ' <span class="badge badge-tt">TT</span>' : '';
             return `<tr>
               <td>${escHtml(AppData.formatDate(ep.date))}</td>
               <td><strong>${escHtml(ep.matiere)}</strong>${tt}</td>
               <td>${salle ? escHtml(salle.nom) : '<span class="badge badge-warn">À préciser</span>'}</td>
-              <td><strong>${conv}</strong></td>
-              <td>${debut}</td>
+              <td><strong>${debut}</strong></td>
               <td><strong>${fin}</strong></td>
             </tr>`;
-          }).join('') : '<tr><td colspan="6">Épreuves à préciser.</td></tr>'}
+          }).join('') : '<tr><td colspan="5">Épreuves à préciser.</td></tr>'}
         </table>
 
         <h2>Aménagements accordés</h2>
