@@ -186,6 +186,7 @@ const Impressions = {
       secretariat  : () => this.recapSecretariat(),
       couloirs     : () => this.convocationsCouloirs(),
       convoccand   : () => this.convocationsCandidatsAmenagement(),
+      recapsalles  : () => this.recapSallesEpreuves(),
     };
     if (fns[doc]) fns[doc]();
   },
@@ -629,6 +630,54 @@ const Impressions = {
     });
 
     this._imprimer('Convocations candidats — aménagements', corps);
+  },
+
+  // ══════════════════════════════════════════════════════════
+  // RÉCAP SALLES × ÉPREUVES × HORAIRES — une page, vue synthétique
+  // Une ligne par couple (salle, épreuve) ; la salle n'est écrite
+  // que sur la première ligne de son groupe (rowspan).
+  // ══════════════════════════════════════════════════════════
+
+  recapSallesEpreuves() {
+    if (!AppData.salles.length) { notifier('Aucune salle définie.', 'error'); return; }
+
+    // Pour chaque salle, la liste des épreuves qui s'y déroulent, triées par date/heure.
+    const groupes = AppData.salles.map(salle => {
+      const eps = AppData.epreuves
+        .filter(ep => AppData.sallesPourEpreuve(ep.id).some(s => s.id === salle.id))
+        .sort((a, b) => (a.date + a.heureDebut).localeCompare(b.date + b.heureDebut));
+      return { salle, eps };
+    }).filter(g => g.eps.length);
+
+    if (!groupes.length) { notifier('Aucune épreuve associée à une salle.', 'error'); return; }
+
+    let lignes = '';
+    groupes.forEach(({ salle, eps }) => {
+      eps.forEach((ep, i) => {
+        const debut = AppData.heureDebutSalle(ep, salle);
+        const fin   = AppData.heureFinSalle(ep, salle);
+        const tt    = AppData.estHoraireTT(salle) ? ' <span class="badge badge-tt">TT</span>' : '';
+        lignes += `<tr>
+          ${i === 0
+            ? `<td rowspan="${eps.length}" style="vertical-align:top"><strong>${escHtml(salle.nom)}</strong>${salle.type === 'amenagee' ? '<br><span class="badge badge-tt">Aménagée</span>' : ''}${salle.type === 'secretariat' ? '<br><span class="badge badge-tt">Secrétariat</span>' : ''}</td>`
+            : ''}
+          <td><strong>${escHtml(ep.matiere)}</strong>${tt}</td>
+          <td>${escHtml(AppData.formatDateCourt(ep.date))}</td>
+          <td>${debut}</td>
+          <td>${fin}</td>
+        </tr>`;
+      });
+    });
+
+    const corps = `<div class="page">${this._entete('Récapitulatif des salles et épreuves')}
+      <table>
+        <tr><th style="width:24%">Salle</th><th>Épreuve</th><th style="width:18%">Date</th><th style="width:12%">Début</th><th style="width:18%">Fin${'\u00A0'}(tiers temps inclus)</th></tr>
+        ${lignes}
+      </table>
+      ${this._signature()}${this._pied()}
+    </div>`;
+
+    this._imprimer('Récap salles et épreuves', corps);
   },
 
   /** Convocations surveillants de couloirs — une page par personnel, consignes éditables */
