@@ -187,6 +187,7 @@ const Impressions = {
       couloirs     : () => this.convocationsCouloirs(),
       convoccand   : () => this.convocationsCandidatsAmenagement(),
       recapsalles  : () => this.recapSallesEpreuves(),
+      survsalle    : () => this.feuillesSurveillanceSalle(),
     };
     if (fns[doc]) fns[doc]();
   },
@@ -678,6 +679,86 @@ const Impressions = {
     </div>`;
 
     this._imprimer('Récap salles et épreuves', corps);
+  },
+
+  // ══════════════════════════════════════════════════════════
+  // FEUILLES DE SURVEILLANCE PAR SALLE — une page par salle
+  // Pour chaque salle : ses épreuves avec horaires et surveillants
+  // affectés ; en bas, les personnels de réserve (réserve + réserve
+  // tiers temps) mobilisables pour ces épreuves.
+  // ══════════════════════════════════════════════════════════
+
+  feuillesSurveillanceSalle() {
+    if (!AppData.salles.length) { notifier('Aucune salle définie.', 'error'); return; }
+
+    const nomSurv = id => { const s = AppData.getSurveillant(id);
+      return s ? `${escHtml(s.nom)} ${escHtml(s.prenom)}${s.fonction ? ` <span style="color:#666">(${escHtml(s.fonction)})</span>` : ''}` : ''; };
+
+    // Salles ayant au moins une épreuve
+    const groupes = AppData.salles.map(salle => {
+      const eps = AppData.epreuves
+        .filter(ep => AppData.sallesPourEpreuve(ep.id).some(s => s.id === salle.id))
+        .sort((a, b) => (a.date + a.heureDebut).localeCompare(b.date + b.heureDebut));
+      return { salle, eps };
+    }).filter(g => g.eps.length);
+
+    if (!groupes.length) { notifier('Aucune épreuve associée à une salle.', 'error'); return; }
+
+    let corps = '';
+    groupes.forEach(({ salle, eps }) => {
+      const typeBadge = salle.type === 'amenagee' ? ' <span class="badge badge-tt">Aménagée</span>'
+        : salle.type === 'secretariat' ? ' <span class="badge badge-tt">Secrétariat</span>' : '';
+
+      // Réserves agrégées sur les épreuves de la salle (dédoublonnées)
+      const reserveIds = new Set();
+      const reserveTTIds = new Set();
+      eps.forEach(ep => {
+        (AppData.reserves[ep.id] || []).forEach(id => reserveIds.add(id));
+        (AppData.reservesTT[ep.id] || []).forEach(id => reserveTTIds.add(id));
+      });
+
+      const lignesEp = eps.map(ep => {
+        const debut = AppData.heureDebutSalle(ep, salle);
+        const fin   = AppData.heureFinSalle(ep, salle);
+        const survs = AppData.getAffectes(ep.id, salle.id);
+        const noms = survs.length
+          ? `<ul style="margin:0;padding-left:18px">${survs.map(id => `<li>${nomSurv(id)}</li>`).join('')}</ul>`
+          : '<em style="color:#999">Aucun surveillant affecté</em>';
+        return `<tr>
+          <td style="vertical-align:top"><strong>${escHtml(ep.matiere)}</strong><br>
+            <span style="color:#666">${escHtml(AppData.formatDateCourt(ep.date))}</span></td>
+          <td style="vertical-align:top">${debut}<br>→ ${fin}</td>
+          <td style="vertical-align:top">${noms}</td>
+        </tr>`;
+      }).join('');
+
+      const blocReserve = (reserveIds.size || reserveTTIds.size)
+        ? `<h2>Personnels de réserve</h2>
+           <div class="bloc">
+             ${reserveIds.size ? `<strong>Réserve :</strong> ${[...reserveIds].map(nomSurv).filter(Boolean).join(', ')}<br>` : ''}
+             ${reserveTTIds.size ? `<strong>Réserve tiers temps :</strong> ${[...reserveTTIds].map(nomSurv).filter(Boolean).join(', ')}` : ''}
+           </div>`
+        : `<h2>Personnels de réserve</h2><div class="bloc"><em style="color:#999">Aucune réserve définie pour ces épreuves.</em></div>`;
+
+      corps += `<div class="page">${this._entete('Feuille de surveillance — salle')}
+        <div class="bloc bloc-bleu" style="font-size:12pt">
+          Salle <strong>${escHtml(salle.nom)}</strong>${typeBadge}
+          ${salle.type !== 'secretariat' ? ` — capacité ${salle.candidats || '—'} candidat(s)` : ''}
+        </div>
+
+        <h2>Épreuves et surveillances</h2>
+        <table>
+          <tr><th style="width:30%">Épreuve</th><th style="width:18%">Horaires</th><th>Surveillant(s) affecté(s)</th></tr>
+          ${lignesEp}
+        </table>
+
+        ${blocReserve}
+
+        ${this._signature()}${this._pied()}
+      </div>`;
+    });
+
+    this._imprimer('Feuilles de surveillance par salle', corps);
   },
 
   /** Convocations surveillants de couloirs — une page par personnel, consignes éditables */
