@@ -182,6 +182,7 @@ const Impressions = {
       accompagnants: () => this.fichesAccompagnants(),
       secretariat  : () => this.recapSecretariat(),
       couloirs     : () => this.convocationsCouloirs(),
+      convoccand   : () => this.convocationsCandidatsAmenagement(),
     };
     if (fns[doc]) fns[doc]();
   },
@@ -518,6 +519,109 @@ const Impressions = {
       ${this._signature()}${this._pied()}
     </div>`;
     this._imprimer('Récap aménagements', corps);
+  },
+
+  // ══════════════════════════════════════════════════════════
+  // CONVOCATIONS CANDIDATS — priorité aux candidats à aménagement
+  // Une page par candidat : épreuves, salle, horaires (tiers temps
+  // pris en compte), liste des aménagements accordés.
+  // ══════════════════════════════════════════════════════════
+
+  convocationsCandidatsAmenagement() {
+    const c = PrintConfig.get();
+    if (!AppData.amenagements.length) { notifier('Aucun candidat à aménagement recensé.', 'error'); return; }
+
+    // Pour un aménagement donné, déterminer les épreuves concernées et la salle de passage.
+    // 1) Si un candidat nominatif y est rattaché : on s'appuie sur ses épreuves / salleParEpreuve.
+    // 2) Sinon : on s'appuie sur la salle de l'aménagement et les épreuves de cette salle.
+    const lignesPourAmenagement = (a) => {
+      const cand = AppData.candidatPourAmenagement
+        ? AppData.candidatPourAmenagement(a.id) : null;
+
+      // a) Candidat nominatif avec affectation de salle par épreuve
+      if (cand && cand.salleParEpreuve && Object.keys(cand.salleParEpreuve).length) {
+        return Object.entries(cand.salleParEpreuve)
+          .map(([epId, salleId]) => ({
+            ep: AppData.getEpreuve(parseInt(epId, 10)),
+            salle: AppData.getSalle(salleId),
+          }))
+          .filter(x => x.ep);
+      }
+
+      // b) Candidat nominatif avec liste d'épreuves mais sans salle précise → salle de l'aménagement
+      const salleAm = a.salleId ? AppData.getSalle(a.salleId) : null;
+      if (cand && Array.isArray(cand.epreuveIds) && cand.epreuveIds.length) {
+        return cand.epreuveIds
+          .map(epId => ({ ep: AppData.getEpreuve(epId), salle: salleAm }))
+          .filter(x => x.ep);
+      }
+
+      // c) Repli : aménagement saisi à la main → épreuves desservies par sa salle,
+      //    sinon (aucune salle) toutes les épreuves.
+      const eps = salleAm
+        ? AppData.epreuves.filter(ep => !salleAm.epreuveIds.length || salleAm.epreuveIds.includes(ep.id))
+        : AppData.epreuves;
+      return eps.map(ep => ({ ep, salle: salleAm }));
+    };
+
+    // Tri : par nom de candidat
+    const liste = [...AppData.amenagements]
+      .sort((a, b) => (a.candidat || '').localeCompare(b.candidat || '', 'fr'));
+
+    let corps = '';
+    liste.forEach(a => {
+      const cand = AppData.candidatPourAmenagement
+        ? AppData.candidatPourAmenagement(a.id) : null;
+      const nom = cand
+        ? `${escHtml(cand.nom)} ${escHtml(cand.prenom)}`.trim()
+        : escHtml(a.candidat || '—');
+      const classe = (cand && cand.classe) ? cand.classe : (a.classe || '');
+      const badges = AppData.amenagementBadges(a);
+
+      const rangs = lignesPourAmenagement(a)
+        .sort((x, y) => ((x.ep.date + x.ep.heureDebut)
+          .localeCompare(y.ep.date + y.ep.heureDebut)));
+
+      corps += `<div class="page">${this._entete('Convocation individuelle du candidat')}
+        <div class="bloc bloc-bleu" style="font-size:12pt">
+          <strong>${nom}</strong>${classe ? ` — classe ${escHtml(classe)}` : ''}<br>
+          <span class="badge badge-tt">Aménagements d\u2019épreuves accordés</span>
+          Présentez-vous <strong>${c.minutesAvant} minutes avant</strong> le début de chaque épreuve,
+          muni(e) d\u2019une pièce d\u2019identité et de votre convocation.
+        </div>
+
+        <h2>Vos épreuves</h2>
+        <table>
+          <tr><th>Date</th><th>Épreuve</th><th>Salle</th><th>Convocation</th><th>Début</th><th>Fin${'\u00A0'}(tiers temps inclus)</th></tr>
+          ${rangs.length ? rangs.map(({ ep, salle }) => {
+            const debut = salle ? AppData.heureDebutSalle(ep, salle) : ep.heureDebut;
+            const fin   = salle ? AppData.heureFinSalle(ep, salle)   : AppData.heureFinTT(ep);
+            const conv  = AppData.addMinutes(debut, -c.minutesAvant);
+            const tt    = (!salle || AppData.estHoraireTT(salle)) ? ' <span class="badge badge-tt">TT</span>' : '';
+            return `<tr>
+              <td>${escHtml(AppData.formatDate(ep.date))}</td>
+              <td><strong>${escHtml(ep.matiere)}</strong>${tt}</td>
+              <td>${salle ? escHtml(salle.nom) : '<span class="badge badge-warn">À préciser</span>'}</td>
+              <td><strong>${conv}</strong></td>
+              <td>${debut}</td>
+              <td><strong>${fin}</strong></td>
+            </tr>`;
+          }).join('') : '<tr><td colspan="6">Épreuves à préciser.</td></tr>'}
+        </table>
+
+        <h2>Aménagements accordés</h2>
+        <div class="bloc">
+          ${badges.length
+            ? `<ul>${badges.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`
+            : 'Aucun aménagement spécifique enregistré.'}
+          ${a.notes ? `<p style="margin-top:6px"><em>${escHtml(a.notes)}</em></p>` : ''}
+        </div>
+
+        ${this._signature()}${this._pied()}
+      </div>`;
+    });
+
+    this._imprimer('Convocations candidats — aménagements', corps);
   },
 
   /** Convocations surveillants de couloirs — une page par personnel, consignes éditables */
