@@ -8,11 +8,13 @@
  * Documents :
  *   1. Note d'organisation (synthèse générale)
  *   2. Planning général de surveillance
- *   3. Plannings individuels des surveillants (1 page / personne)
- *   4. Feuilles d'émargement (1 page / épreuve)
+ *   3. Convocations Surveillances de Salles (1 page / surveillant)
+ *   4. Émargement surveillance Salles (1 page / épreuve, 1 ligne / salle)
  *   5. Affiches portes de salles (A4 paysage)
- *   6. Fiches de préparation des salles (besoins matériels)
- *   7. Récapitulatif aménagements / secrétariat d'examen
+ *   6. Récapitulatif aménagements
+ *   7. Fiches accompagnants
+ *   8. Secrétariat — suivi copies (A3)
+ *   9. Secrétariat — calendrier épreuves (A3)
  */
 
 'use strict';
@@ -175,19 +177,17 @@ const Impressions = {
       return;
     }
     const fns = {
-      note         : () => this.noteOrganisation(),
-      planning     : () => this.planningGeneral(),
-      individuels  : () => this.planningsIndividuels(),
-      emargement   : () => this.feuillesEmargement(),
-      affiches     : () => this.affichesPortes(),
-      preparation  : () => this.fichesPreparation(),
-      amenagements : () => this.recapAmenagements(),
-      accompagnants: () => this.fichesAccompagnants(),
-      secretariat  : () => this.recapSecretariat(),
-      couloirs     : () => this.convocationsCouloirs(),
-      convoccand   : () => this.convocationsCandidatsAmenagement(),
-      recapsalles  : () => this.recapSallesEpreuves(),
-      survsalle    : () => this.feuillesSurveillanceSalle(),
+      note                  : () => this.noteOrganisation(),
+      planning              : () => this.planningGeneral(),
+      individuels           : () => this.planningsIndividuels(),
+      emargement            : () => this.feuillesEmargement(),
+      affiches              : () => this.affichesPortes(),
+      amenagements          : () => this.recapAmenagements(),
+      accompagnants         : () => this.fichesAccompagnants(),
+      convoccand            : () => this.convocationsCandidatsAmenagement(),
+      survsalle             : () => this.feuillesSurveillanceSalle(),
+      secretariatSuivi      : () => this.secretariatSuiviCopies(),
+      secretariatCalendrier : () => this.secretariatCalendrier(),
     };
     if (fns[doc]) fns[doc]();
   },
@@ -387,7 +387,7 @@ const Impressions = {
       creneaux.sort((a, b) => a.tri.localeCompare(b.tri));
       const charge = AppData.chargeSurveillant(surv.id);
 
-      corps += `<div class="page">${this._entete('Convocation — surveillance d\u2019examen')}
+      corps += `<div class="page">${this._entete('Convocation — surveillance de salle')}
         <div class="bloc bloc-bleu" style="font-size:12pt">
           <strong>${escHtml(surv.nom)} ${escHtml(surv.prenom)}</strong> — ${escHtml(surv.fonction)}<br>
           ${creneaux.length} créneau(x) (surveillance, secrétariat, réserve, couloirs) ·
@@ -413,32 +413,43 @@ const Impressions = {
   },
 
   // ══════════════════════════════════════════════════════════
-  // 4. FEUILLES D'ÉMARGEMENT (1 page / épreuve)
+  // 4. ÉMARGEMENT SURVEILLANCE SALLES (1 page / épreuve)
+  // Une ligne par salle (hors secrétariat) — les deux surveillants
+  // sont regroupés sur la même ligne.
   // ══════════════════════════════════════════════════════════
 
   feuillesEmargement() {
     let corps = '';
     AppData.epreuves.forEach(ep => {
-      const lignes = [];
-      AppData.sallesPourEpreuve(ep.id).forEach(salle => {
-        AppData.getAffectes(ep.id, salle.id).forEach(id => {
-          const s = AppData.getSurveillant(id);
-          if (s) lignes.push({ s, salle });
-        });
+      // Salles concernées par cette épreuve, sauf le secrétariat d'examen
+      const salles = AppData.sallesPourEpreuve(ep.id)
+        .filter(s => s.type !== 'secretariat');
+
+      // Pour chaque salle : lister les surveillants affectés (max 2 en pratique)
+      const lignes = salles.map(salle => {
+        const survs = AppData.getAffectes(ep.id, salle.id)
+          .map(id => { const s = AppData.getSurveillant(id); return s ? `${escHtml(s.nom)} ${escHtml(s.prenom)}` : ''; })
+          .filter(Boolean);
+        const nomsSurv = survs.join(' / ') || '<em style="color:#999">Non pourvu</em>';
+        return { salle, nomsSurv };
       });
-      corps += `<div class="page">${this._entete('Feuille d\u2019émargement des surveillants')}
-        <div class="bloc bloc-bleu"><strong>${escHtml(ep.matiere)}</strong> — ${escHtml(AppData.formatDate(ep.date))} · ${ep.heureDebut}–${AppData.heureFin(ep)}</div>
+
+      corps += `<div class="page">${this._entete('\u00c9margement surveillance Salles')}
+        <div class="bloc bloc-bleu"><strong>${escHtml(ep.matiere)}</strong> — ${escHtml(AppData.formatDate(ep.date))} · ${ep.heureDebut}\u2013${AppData.heureFin(ep)}</div>
         <table>
-          <tr><th style="width:34%">Surveillant</th><th style="width:16%">Salle</th><th style="width:25%">Signature arrivée</th><th style="width:25%">Signature départ</th></tr>
+          <tr><th style="width:30%">Salle</th><th style="width:35%">Surveillant(s)</th><th style="width:18%">Signature arrivée</th><th style="width:17%">Signature départ</th></tr>
           ${lignes.length ? lignes.map(l => `<tr>
-            <td><strong>${escHtml(l.s.nom)}</strong> ${escHtml(l.s.prenom)}</td>
-            <td>${escHtml(l.salle.nom)}</td><td class="emarge-cell"></td><td class="emarge-cell"></td></tr>`).join('')
-          : '<tr><td colspan="4">Aucun surveillant affecté.</td></tr>'}
+            <td><strong>${escHtml(l.salle.nom)}</strong>${l.salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}</td>
+            <td>${l.nomsSurv}</td>
+            <td class="emarge-cell"></td>
+            <td class="emarge-cell"></td>
+          </tr>`).join('')
+          : '<tr><td colspan="4">Aucune salle affectée.</td></tr>'}
         </table>
         ${this._signature()}${this._pied()}
       </div>`;
     });
-    this._imprimer('Feuilles d\u2019émargement', corps);
+    this._imprimer('\u00c9margement surveillance Salles', corps);
   },
 
   // ══════════════════════════════════════════════════════════
@@ -465,39 +476,6 @@ const Impressions = {
     this._imprimer('Affiches portes', corps, true);
   },
 
-  // ══════════════════════════════════════════════════════════
-  // 6. FICHES DE PRÉPARATION DES SALLES
-  // ══════════════════════════════════════════════════════════
-
-  fichesPreparation() {
-    const salles = AppData.salles.filter(s => s.type !== 'secretariat');
-    if (!salles.length) { notifier('Aucune salle d\u2019examen définie.', 'error'); return; }
-
-    let corps = `<div class="page">${this._entete('Fiches de préparation des salles')}
-      <p>À destination des agents et de la vie scolaire — marge fournitures : ${AppData.params.margeMateriel} %.</p>`;
-
-    salles.forEach(salle => {
-      const b = AppData.besoinsSalle(salle);
-      corps += `<div class="bloc">
-        <strong style="font-size:12pt">Salle ${escHtml(salle.nom)}</strong>
-        ${salle.type === 'amenagee' ? ' <span class="badge badge-tt">♿ Aménagée</span>' : ''}
-        — ${salle.candidats} candidat(s)${salle.capacite ? ` / ${salle.capacite} places` : ''}
-        <table style="margin-top:6px">
-          <tr><th>Sujets</th><th>Copies doubles</th><th>Brouillons</th><th>Matériel spécifique</th></tr>
-          <tr>
-            <td class="grand-nombre" style="text-align:center">${b.sujets}</td>
-            <td class="grand-nombre" style="text-align:center">${b.copies}</td>
-            <td class="grand-nombre" style="text-align:center">${b.brouillons}</td>
-            <td>${escHtml(salle.materiel || 'Horloge visible, affichage retiré des murs')}</td>
-          </tr>
-        </table>
-        ${salle.notes ? `<small>${escHtml(salle.notes)}</small>` : ''}
-      </div>`;
-    });
-
-    corps += this._signature() + this._pied() + '</div>';
-    this._imprimer('Fiches de préparation', corps);
-  },
 
   // ══════════════════════════════════════════════════════════
   // 7. RÉCAP AMÉNAGEMENTS / SECRÉTARIAT D'EXAMEN
@@ -633,53 +611,6 @@ const Impressions = {
     this._imprimer('Convocations candidats — aménagements', corps);
   },
 
-  // ══════════════════════════════════════════════════════════
-  // RÉCAP SALLES × ÉPREUVES × HORAIRES — une page, vue synthétique
-  // Une ligne par couple (salle, épreuve) ; la salle n'est écrite
-  // que sur la première ligne de son groupe (rowspan).
-  // ══════════════════════════════════════════════════════════
-
-  recapSallesEpreuves() {
-    if (!AppData.salles.length) { notifier('Aucune salle définie.', 'error'); return; }
-
-    // Pour chaque salle, la liste des épreuves qui s'y déroulent, triées par date/heure.
-    const groupes = AppData.salles.map(salle => {
-      const eps = AppData.epreuves
-        .filter(ep => AppData.sallesPourEpreuve(ep.id).some(s => s.id === salle.id))
-        .sort((a, b) => (a.date + a.heureDebut).localeCompare(b.date + b.heureDebut));
-      return { salle, eps };
-    }).filter(g => g.eps.length);
-
-    if (!groupes.length) { notifier('Aucune épreuve associée à une salle.', 'error'); return; }
-
-    let lignes = '';
-    groupes.forEach(({ salle, eps }) => {
-      eps.forEach((ep, i) => {
-        const debut = AppData.heureDebutSalle(ep, salle);
-        const fin   = AppData.heureFinSalle(ep, salle);
-        const tt    = AppData.estHoraireTT(salle) ? ' <span class="badge badge-tt">TT</span>' : '';
-        lignes += `<tr>
-          ${i === 0
-            ? `<td rowspan="${eps.length}" style="vertical-align:top"><strong>${escHtml(salle.nom)}</strong>${salle.type === 'amenagee' ? '<br><span class="badge badge-tt">Aménagée</span>' : ''}${salle.type === 'secretariat' ? '<br><span class="badge badge-tt">Secrétariat</span>' : ''}</td>`
-            : ''}
-          <td><strong>${escHtml(ep.matiere)}</strong>${tt}</td>
-          <td>${escHtml(AppData.formatDateCourt(ep.date))}</td>
-          <td>${debut}</td>
-          <td>${fin}</td>
-        </tr>`;
-      });
-    });
-
-    const corps = `<div class="page">${this._entete('Récapitulatif des salles et épreuves')}
-      <table>
-        <tr><th style="width:24%">Salle</th><th>Épreuve</th><th style="width:18%">Date</th><th style="width:12%">Début</th><th style="width:18%">Fin${'\u00A0'}(tiers temps inclus)</th></tr>
-        ${lignes}
-      </table>
-      ${this._signature()}${this._pied()}
-    </div>`;
-
-    this._imprimer('Récap salles et épreuves', corps);
-  },
 
   // ══════════════════════════════════════════════════════════
   // FEUILLES DE SURVEILLANCE PAR SALLE — une page par salle
@@ -761,171 +692,7 @@ const Impressions = {
     this._imprimer('Feuilles de surveillance par salle', corps);
   },
 
-  /** Convocations surveillants de couloirs — une page par personnel, consignes éditables */
-  convocationsCouloirs() {
-    const c = PrintConfig.get();
-    if (!AppData.couloirs.length) { notifier('Aucun couloir défini (onglet Salles).', 'error'); return; }
 
-    // survId → [{ ep, couloir, debut, fin, duree }]
-    const parPers = new Map();
-    AppData.epreuves.forEach(ep => {
-      AppData.surveillants.forEach(sv => {
-        AppData.creneauxCouloirDe(ep, sv.id).forEach(cc => {
-          if (!parPers.has(sv.id)) parPers.set(sv.id, []);
-          parPers.get(sv.id).push({ ep, ...cc });
-        });
-      });
-    });
-    if (!parPers.size) { notifier('Aucun surveillant affecté aux couloirs — lancez la répartition.', 'error'); return; }
-
-    const blocConsignes = `
-      <div class="bloc bloc-bleu"><strong>Consignes — surveillance des couloirs</strong>
-        <ul>${c.consignesCouloir.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>
-      </div>`;
-
-    let corps = '';
-    [...parPers.entries()]
-      .map(([id, crs]) => ({ sv: AppData.getSurveillant(id), crs }))
-      .filter(x => x.sv)
-      .sort((a, b) => (a.sv.nom + a.sv.prenom).localeCompare(b.sv.nom + b.sv.prenom, 'fr'))
-      .forEach(({ sv, crs }) => {
-        const totalMin = crs.reduce((a, x) => a + x.duree, 0);
-        corps += `<div class="page">${this._entete(`Convocation surveillance de couloir — ${escHtml(sv.nom)} ${escHtml(sv.prenom)}`)}
-          <div class="bloc bloc-bleu">${escHtml(sv.fonction || '')} —
-            <strong>${crs.length} créneau(x), ${AppData.formatDuree(totalMin)}</strong> au total.
-            La surveillance de couloir débute <strong>dès le début du créneau</strong> indiqué
-            (au moment où les surveillants de salle prennent leur poste).</div>
-          <table>
-            <tr><th>Date</th><th>Épreuve</th><th>Couloir</th><th>Début du créneau</th><th>Fin du créneau</th><th>Durée</th></tr>
-            ${crs.sort((x, y) => (x.ep.date + x.debut).localeCompare(y.ep.date + y.debut)).map(x => `<tr>
-              <td>${escHtml(AppData.formatDate(x.ep.date))}</td>
-              <td>${escHtml(x.ep.matiere)}</td>
-              <td><strong>🚶 ${escHtml(x.couloir.nom)}</strong></td>
-              <td><strong>${x.debut}</strong></td>
-              <td>${x.fin}</td>
-              <td>${AppData.formatDuree(x.duree)}</td>
-            </tr>`).join('')}
-          </table>
-          ${blocConsignes}
-          ${this._signature()}${this._pied()}
-        </div>`;
-      });
-
-    this._imprimer('Convocations couloirs', corps);
-  },
-
-  /** Secrétariat d'examen — vue d'ensemble + convocation individuelle détaillée par personnel */
-  recapSecretariat() {
-    const c = PrintConfig.get();
-    const sallesSecr = AppData.salles.filter(s => s.type === 'secretariat');
-    if (!sallesSecr.length) { notifier('Aucune salle de type secrétariat d\u2019examen.', 'error'); return; }
-
-    const creneauxSalle = [];   // { ep, salle, affectes }
-    AppData.epreuves.forEach(ep => {
-      sallesSecr
-        .filter(salle => !salle.epreuveIds.length || salle.epreuveIds.includes(ep.id))
-        .forEach(salle => creneauxSalle.push({ ep, salle, affectes: AppData.getAffectes(ep.id, salle.id) }));
-    });
-    if (!creneauxSalle.length) { notifier('Aucune épreuve associée aux salles de secrétariat.', 'error'); return; }
-
-    const consignesSecr = `
-      <div class="bloc bloc-bleu"><strong>Consignes — secrétariat d\u2019examen</strong>
-        <ul>${c.consignesSecr.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>
-      </div>`;
-
-    // ── Page 1 : vue d'ensemble ──
-    let lignes = '';
-    creneauxSalle.forEach(({ ep, salle, affectes }) => {
-      const noms = affectes
-        .map(id => { const sv = AppData.getSurveillant(id); return sv ? `${escHtml(sv.nom)} ${escHtml(sv.prenom)}` : ''; })
-        .filter(Boolean).join('<br>') || '<span class="badge badge-warn">À pourvoir</span>';
-      const candidats = AppData.amenagements.filter(a => a.salleId === salle.id)
-        .map(a => `${escHtml(a.candidat)}${a.classe ? ' (' + escHtml(a.classe) + ')' : ''}`)
-        .join(', ') || '—';
-      lignes += `<tr>
-        <td>${escHtml(AppData.formatDateCourt(ep.date))}</td>
-        <td><strong>${escHtml(ep.matiere)}</strong></td>
-        <td>${escHtml(salle.nom)}</td>
-        <td><strong>${AppData.addMinutes(AppData.heureDebutSalle(ep, salle), -c.minutesAvantSecr)}</strong><br><small>(${c.minutesAvantSecr} min avant)</small></td>
-        <td>${AppData.heureDebutSalle(ep, salle)}</td>
-        <td><strong>${AppData.heureFinSalle(ep, salle)}</strong><br><span class="badge badge-tt">fin TT${AppData.params.margeSecr ? ' + ' + AppData.params.margeSecr + ' min' : ''}</span></td>
-        <td>${AppData.formatDuree(AppData.dureeCreneau(ep, salle))}</td>
-        <td>${noms}</td>
-        <td>${candidats}</td>
-      </tr>`;
-    });
-
-    let corps = `<div class="page">${this._entete('Secrétariat d\u2019examen — organisation générale')}
-      <div class="bloc bloc-bleu">Document confidentiel — diffusion restreinte (RGPD).</div>
-      <table>
-        <tr><th>Date</th><th>Épreuve</th><th>Salle</th><th>Présence</th><th>Début</th><th>Fin</th><th>Durée</th><th>Personnels</th><th>Candidats accompagnés</th></tr>
-        ${lignes}
-      </table>
-      ${consignesSecr}
-      ${this._signature()}${this._pied()}
-    </div>`;
-
-    // ── Pages suivantes : convocation individuelle par personnel ──
-    const parPers = new Map();   // survId → [{ ep, salle }]
-    creneauxSalle.forEach(({ ep, salle, affectes }) =>
-      affectes.forEach(id => {
-        if (!parPers.has(id)) parPers.set(id, []);
-        parPers.get(id).push({ ep, salle });
-      }));
-
-    [...parPers.entries()]
-      .map(([id, crs]) => ({ sv: AppData.getSurveillant(id), crs }))
-      .filter(x => x.sv)
-      .sort((a, b) => (a.sv.nom + a.sv.prenom).localeCompare(b.sv.nom + b.sv.prenom, 'fr'))
-      .forEach(({ sv, crs }) => {
-        const totalMin = crs.reduce((a, x) => a + AppData.dureeCreneau(x.ep, x.salle), 0);
-
-        corps += `<div class="page">${this._entete(`Convocation secrétariat d\u2019examen — ${escHtml(sv.nom)} ${escHtml(sv.prenom)}`)}
-          <div class="bloc bloc-bleu">${escHtml(sv.fonction || '')} —
-            <strong>${crs.length} créneau(x), ${AppData.formatDuree(totalMin)}</strong> au total.
-            Présence requise <strong>${c.minutesAvantSecr} minutes avant</strong> chaque épreuve,
-            et jusqu\u2019à <strong>${AppData.params.margeSecr || 0} min après la fin du tiers temps</strong> (vérifications).</div>
-          <table>
-            <tr><th>Date</th><th>Épreuve</th><th>Salle</th><th>Présence en salle</th><th>Début de l\u2019épreuve</th><th>Fin de présence</th><th>Durée</th></tr>
-            ${crs.sort((x, y) => (x.ep.date + x.ep.heureDebut).localeCompare(y.ep.date + y.ep.heureDebut)).map(({ ep, salle }) => `<tr>
-              <td>${escHtml(AppData.formatDate(ep.date))}</td>
-              <td><strong>${escHtml(ep.matiere)}</strong></td>
-              <td><strong>${escHtml(salle.nom)}</strong></td>
-              <td><strong>${AppData.addMinutes(AppData.heureDebutSalle(ep, salle), -c.minutesAvantSecr)}</strong> <small>(${c.minutesAvantSecr} min avant)</small></td>
-              <td>${AppData.heureDebutSalle(ep, salle)}</td>
-              <td><strong>${AppData.heureFinSalle(ep, salle)}</strong></td>
-              <td>${AppData.formatDuree(AppData.dureeCreneau(ep, salle))}</td>
-            </tr>`).join('')}
-          </table>
-          ${crs.map(({ ep, salle }) => {
-            const cands = AppData.amenagements.filter(a => a.salleId === salle.id);
-            if (!cands.length) return '';
-            return `<h2>${escHtml(ep.matiere)} (${escHtml(AppData.formatDateCourt(ep.date))}) — salle ${escHtml(salle.nom)} : candidats et aménagements</h2>
-              <table>
-                <tr><th>Candidat</th><th>Classe</th><th>Aménagements</th></tr>
-                ${cands.map(a => `<tr>
-                  <td><strong>${escHtml(a.candidat)}</strong></td>
-                  <td>${escHtml(a.classe || '—')}</td>
-                  <td>${AppData.amenagementBadges(a).map(b => escHtml(b)).join(' · ') || '—'}</td>
-                </tr>`).join('')}
-              </table>`;
-          }).join('')}
-          ${salleMateriel(crs)}
-          ${consignesSecr}
-          ${this._signature()}${this._pied()}
-        </div>`;
-      });
-
-    function salleMateriel(crs) {
-      const salles = [...new Map(crs.map(x => [x.salle.id, x.salle])).values()]
-        .filter(sa => (sa.materiel || '').trim());
-      if (!salles.length) return '';
-      return `<h2>Matériel à prévoir</h2><ul>${salles.map(sa =>
-        `<li><strong>${escHtml(sa.nom)}</strong> : ${escHtml(sa.materiel)}</li>`).join('')}</ul>`;
-    }
-
-    this._imprimer('Secrétariat d\u2019examen', corps);
-  },
 
   /** 8. Fiches accompagnants — une page par accompagnant (lecteur/scripteur, AESH…) */
   fichesAccompagnants() {
@@ -995,6 +762,172 @@ const Impressions = {
     });
 
     this._imprimer('Fiches accompagnants', corps);
+  },
+
+  // ══════════════════════════════════════════════════════════
+  // SECRÉTARIAT — SUIVI COPIES (A3)
+  // Une page par épreuve (format A3 paysage).
+  // Tableau par salle : colonne "copies rendues" à cocher/rayer.
+  // Permet de savoir, au retour des enveloppes, où on en est.
+  // ══════════════════════════════════════════════════════════
+
+  secretariatSuiviCopies() {
+    const css3 = `@page { size: A3 landscape; margin: 12mm; }`;
+    let corps = '';
+
+    AppData.epreuves.forEach(ep => {
+      // Toutes les salles de cette épreuve (y compris secrétariat exclu de la liste copies)
+      const salles = AppData.sallesPourEpreuve(ep.id).filter(s => s.type !== 'secretariat');
+      if (!salles.length) return;
+
+      const lignes = salles.map(salle => {
+        const debut = AppData.heureDebutSalle(ep, salle);
+        const fin   = AppData.heureFinSalle(ep, salle);
+        const survs = AppData.getAffectes(ep.id, salle.id)
+          .map(id => { const s = AppData.getSurveillant(id); return s ? `${escHtml(s.nom)} ${escHtml(s.prenom)}` : ''; })
+          .filter(Boolean).join(', ') || '<em style="color:#999">—</em>';
+        const nbCand = salle.candidats || '?';
+        return `<tr style="height:42px">
+          <td style="font-size:13pt;font-weight:700">${escHtml(salle.nom)}${salle.type === 'amenagee' ? ' <span class="badge badge-tt">TT</span>' : ''}</td>
+          <td style="text-align:center;font-size:11pt">${nbCand}</td>
+          <td style="font-size:10pt">${debut}&ndash;${fin}</td>
+          <td style="font-size:10pt">${survs}</td>
+          <td style="text-align:center;font-size:20pt">☐</td>
+          <td style="font-size:10pt"></td>
+        </tr>`;
+      }).join('');
+
+      corps += `<div class="page">
+        ${this._entete('Secrétariat — Suivi retour des copies')}
+        <div class="bloc bloc-bleu" style="font-size:13pt;margin-bottom:12px">
+          <strong>${escHtml(ep.matiere)}</strong> &nbsp;·&nbsp;
+          ${escHtml(AppData.formatDate(ep.date))} &nbsp;·&nbsp;
+          ${ep.heureDebut}&ndash;${AppData.heureFin(ep)}
+          ${AppData.heureFinTT(ep) !== AppData.heureFin(ep)
+            ? ` &nbsp;·&nbsp; <span class="badge badge-tt">Fin tiers temps : ${AppData.heureFinTT(ep)}</span>`
+            : ''}
+        </div>
+        <table style="font-size:11pt">
+          <tr>
+            <th style="width:18%">Salle</th>
+            <th style="width:10%">Candidats</th>
+            <th style="width:16%">Horaires</th>
+            <th style="width:28%">Surveillant(s)</th>
+            <th style="width:10%;text-align:center">Copies<br>rendues</th>
+            <th style="width:18%">Observations</th>
+          </tr>
+          ${lignes}
+        </table>
+        <div style="margin-top:16px;font-size:9pt;color:#6b7280">
+          Cocher ou rayer la case &laquo;&nbsp;Copies rendues&nbsp;&raquo; dès que le surveillant rapporte l'enveloppe au secrétariat. Consigner tout incident dans la colonne Observations.
+        </div>
+        ${this._pied()}
+      </div>`;
+    });
+
+    if (!corps) { notifier('Aucune salle d’examen avec épreuve assignée.', 'error'); return; }
+
+    // On injecte la règle @page A3 en prepend dans le CSS du popup
+    const w = window.open('', '_blank');
+    if (!w) { notifier('Autorisez les fenêtres pop-up pour imprimer.', 'error'); return; }
+    const cssFull = css3 + `
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'Segoe UI', system-ui, sans-serif; color: #111827; font-size: 11pt; line-height: 1.5; }
+      .page { page-break-after: always; }
+      .page:last-child { page-break-after: auto; }
+      .entete { display: flex; align-items: center; gap: 14px; border-bottom: 3px solid #0d2240; padding-bottom: 8px; margin-bottom: 16px; }
+      .entete img { max-height: 52px; }
+      .entete-titres { flex: 1; }
+      .entete h1 { font-size: 16pt; color: #0d2240; }
+      .entete .sous { font-size: 10pt; color: #6b7280; }
+      table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+      th { background: #0d2240; color: #fff; padding: 6px 10px; text-align: left; font-size: 9.5pt; text-transform: uppercase; letter-spacing: .04em; }
+      td { border: 1px solid #d1d5db; padding: 5px 10px; vertical-align: middle; }
+      tr:nth-child(even) td { background: #f9fafb; }
+      .badge { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: 8pt; font-weight: 700; }
+      .badge-tt { background: #fef3c7; color: #92400e; }
+      .bloc { border: 1.5px solid #d1d5db; border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+      .bloc-bleu { border-color: #dbeafe; background: #eff6ff; }
+      .pied { margin-top: 14px; font-size: 8pt; color: #9ca3af; text-align: center; }
+    `;
+    w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Secrétariat — Suivi copies</title><style>${cssFull}</style></head><body>${corps}</body></html>`);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 350);
+  },
+
+  // ══════════════════════════════════════════════════════════
+  // SECRÉTARIAT — CALENDRIER ÉPREUVES (A3)
+  // Une seule feuille A3 paysage : toutes les épreuves avec
+  // leur date et leurs horaires. Pas de salles, pas de noms.
+  // ══════════════════════════════════════════════════════════
+
+  secretariatCalendrier() {
+    // Groupement par jour
+    const jours = AppData.jours();
+    if (!jours.length) { notifier('Aucune épreuve définie.', 'error'); return; }
+
+    let lignes = '';
+    let couleur = false;
+    jours.forEach(jour => {
+      const eps = AppData.epreuves
+        .filter(e => e.date === jour)
+        .sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
+
+      eps.forEach((ep, i) => {
+        couleur = !couleur;
+        lignes += `<tr style="background:${couleur ? '#f0f4ff' : '#ffffff'}">
+          ${i === 0 ? `<td rowspan="${eps.length}" style="font-weight:700;font-size:12pt;vertical-align:middle;border-right:2px solid #0d2240">${escHtml(AppData.formatDate(jour))}</td>` : ''}
+          <td style="font-size:13pt;font-weight:700;padding:10px 14px">${escHtml(ep.matiere)}</td>
+          <td style="font-size:13pt;text-align:center;font-weight:700">${ep.heureDebut}</td>
+          <td style="font-size:13pt;text-align:center">${AppData.heureFin(ep)}</td>
+          <td style="font-size:11pt;text-align:center;color:#92400e">${AppData.heureFinTT(ep) !== AppData.heureFin(ep) ? AppData.heureFinTT(ep) : '—'}</td>
+          <td style="font-size:10pt;color:#6b7280">${ep.duree} min${ep.coefficient ? ` · coeff. ${ep.coefficient}` : ''}</td>
+          <td style="padding:10px"></td>
+        </tr>`;
+      });
+    });
+
+    const corps = `<div class="page">
+      ${this._entete('Calendrier des épreuves — Secrétariat')}
+      <table style="font-size:11pt;margin-top:10px">
+        <tr>
+          <th style="width:18%">Date</th>
+          <th style="width:30%">Épreuve</th>
+          <th style="width:10%;text-align:center">Début</th>
+          <th style="width:10%;text-align:center">Fin</th>
+          <th style="width:13%;text-align:center">Fin tiers temps</th>
+          <th style="width:12%">Durée / coeff.</th>
+          <th style="width:7%">Obs.</th>
+        </tr>
+        ${lignes}
+      </table>
+      <div style="margin-top:16px;font-size:9pt;color:#6b7280">
+        Les horaires de fin tiers temps (×4/3) ne s'affichent que lorsqu'ils diffèrent de la fin standard. Document sans données nominatives — diffusion libre au secrétariat.
+      </div>
+      ${this._pied()}
+    </div>`;
+
+    const css3 = `@page { size: A3 landscape; margin: 12mm; }`;
+    const w = window.open('', '_blank');
+    if (!w) { notifier('Autorisez les fenêtres pop-up pour imprimer.', 'error'); return; }
+    const cssFull = css3 + `
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'Segoe UI', system-ui, sans-serif; color: #111827; font-size: 11pt; line-height: 1.5; }
+      .page { page-break-after: always; }
+      .page:last-child { page-break-after: auto; }
+      .entete { display: flex; align-items: center; gap: 14px; border-bottom: 3px solid #0d2240; padding-bottom: 8px; margin-bottom: 16px; }
+      .entete img { max-height: 52px; }
+      .entete-titres { flex: 1; }
+      .entete h1 { font-size: 16pt; color: #0d2240; }
+      .entete .sous { font-size: 10pt; color: #6b7280; }
+      table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+      th { background: #0d2240; color: #fff; padding: 7px 12px; text-align: left; font-size: 10pt; text-transform: uppercase; letter-spacing: .04em; }
+      td { border: 1px solid #d1d5db; padding: 6px 12px; vertical-align: middle; }
+      .pied { margin-top: 14px; font-size: 8pt; color: #9ca3af; text-align: center; }
+    `;
+    w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Calendrier épreuves — Secrétariat</title><style>${cssFull}</style></head><body>${corps}</body></html>`);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 350);
   },
 };
 window.Impressions = Impressions;
