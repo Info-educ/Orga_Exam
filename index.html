@@ -40,6 +40,9 @@
         <button class="nav-item" role="tab" data-tab="salles" aria-selected="false">
           <span class="nav-item-icon">🚪</span><span class="nav-item-label">Salles &amp; besoins</span>
         </button>
+        <button class="nav-item" role="tab" data-tab="affectation" aria-selected="false">
+          <span class="nav-item-icon">🎓</span><span class="nav-item-label">Affectation élèves</span>
+        </button>
         <button class="nav-item" role="tab" data-tab="surveillants" aria-selected="false">
           <span class="nav-item-icon">👥</span><span class="nav-item-label">Surveillants</span>
         </button>
@@ -156,20 +159,26 @@
           <h3 class="sous-titre">🚶 Couloirs à surveiller</h3>
           <p class="section-desc">La surveillance de couloir démarre à l’heure où les surveillants doivent être en salle, puis tourne par <strong>créneaux d’1 heure</strong> jusqu’à la fin de l’épreuve. L’affectation se fait dans le module Répartition (automatique ou manuelle).</p>
           <div id="zone-couloirs"></div>
+        </section>
 
-          <!-- ───── SOUS-MODULE : AFFECTATION DES ÉLÈVES EN SALLES ───── -->
-          <h3 class="sous-titre">🎓 Affectation des élèves en salles</h3>
-          <p class="section-desc">Affectez nominativement les candidats dans les salles ordinaires. Disponible après import de la liste des candidats.</p>
+        <!-- ═══ ONGLET AFFECTATION ÉLÈVES ═══ -->
+        <section class="tab-panel" id="tab-affectation" hidden>
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">🎓 Affectation des élèves en salles</h2>
+              <p class="section-desc">Affectez nominativement les candidats dans les salles. Définissez d'abord les groupes de séparation, puis lancez l'affectation automatique.</p>
+            </div>
+          </div>
 
           <!-- Sous-navigation interne -->
-          <div class="vue-switcher" style="margin-top:16px">
+          <div class="vue-switcher">
             <button class="vue-btn active" id="aff-btn-groupes">🚫 Groupes de séparation</button>
             <button class="vue-btn" id="aff-btn-affecter">⚡ Affecter en salles</button>
           </div>
 
           <!-- Panel groupes de séparation -->
           <div id="aff-panel-groupes">
-            <div class="section-header" style="margin-bottom:12px;margin-top:16px">
+            <div class="section-header" style="margin-bottom:12px;margin-top:4px">
               <div>
                 <p class="section-desc" style="margin:0">Définissez des groupes d'au moins 2 élèves que l'algorithme placera dans des salles différentes (ex. : fratrie, triche suspectée, conflits).</p>
               </div>
@@ -208,7 +217,6 @@
             </div>
             <div id="aff-preview"></div>
           </div>
-          <!-- ───── FIN AFFECTATION ÉLÈVES ───── -->
         </section>
 
         <!-- ═══ ONGLET AMÉNAGEMENTS ═══ -->
