@@ -597,6 +597,61 @@
     </div>
   </div>
 
+  <!-- Modal Candidat (édition) -->
+  <div class="modal" id="modal-candidat" role="dialog" aria-modal="true" hidden>
+    <div class="modal-inner">
+      <div class="modal-header"><h3>Modifier le candidat</h3>
+        <button class="modal-close" aria-label="Fermer">✕</button></div>
+      <form class="modal-form" id="form-candidat">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="cand-nom">Nom <span class="required">*</span></label>
+            <input type="text" id="cand-nom" required>
+          </div>
+          <div class="form-group">
+            <label for="cand-prenom">Prénom <span class="required">*</span></label>
+            <input type="text" id="cand-prenom" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="cand-sexe">Sexe</label>
+            <select id="cand-sexe">
+              <option value="">—</option>
+              <option value="F">F</option>
+              <option value="M">M</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="cand-classe">Classe</label>
+            <input type="text" id="cand-classe" placeholder="TG1, 3A…">
+          </div>
+          <div class="form-group">
+            <label for="cand-naissance">Date de naissance</label>
+            <input type="text" id="cand-naissance" placeholder="JJ/MM/AAAA">
+          </div>
+        </div>
+        <div class="form-group full">
+          <label>Spécialités / Options</label>
+          <div id="cand-options-liste" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+            <input type="text" id="cand-option-new" placeholder="Ajouter une spécialité…" style="flex:1">
+            <button type="button" class="btn btn-outline" id="btn-cand-option-add">+ Ajouter</button>
+          </div>
+          <p class="field-hint" style="margin-top:4px">Les spécialités connues (issues de l'import) sont proposées en cases à cocher. Vous pouvez aussi en saisir une manuellement.</p>
+        </div>
+        <div class="form-group full">
+          <label for="cand-notes">Notes</label>
+          <input type="text" id="cand-notes" placeholder="Remarques…">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close-modal>Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Modal Aménagement -->
   <div class="modal" id="modal-amenagement" role="dialog" aria-modal="true" hidden>
     <div class="modal-inner">
