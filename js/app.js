@@ -16,6 +16,7 @@ function protegerScrollGlobal() {
     [Salles,       ['rendre', 'rendreAmenagements']],
     [Candidats,    ['rendre']],
     [Surveillants, ['rendre']],
+    [Affectation,  ['rendre', '_rendreGroupes', '_rendrePreview']],
     [Repartition,  ['rendre']],
     [Recap,        ['rendre']],
   ];
@@ -41,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
   Salles.init();
   Candidats.init();
   Surveillants.init();
+  Affectation.init();
   Repartition.init();
   Recap.init();
   Impressions.init();

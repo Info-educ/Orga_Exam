@@ -146,7 +146,7 @@ const UI = {
   rafraichirOnglet(tab) {
     switch (tab) {
       case 'epreuves':     Parametres.rendreEpreuves(); break;
-      case 'salles':       Salles.rendre(); break;
+      case 'salles':       Salles.rendre(); Affectation.rendre(); break;
       case 'candidats':    Candidats.rendre(); break;
       case 'amenagements': Salles.rendreAmenagements(); break;
       case 'surveillants': Surveillants.rendre(); break;

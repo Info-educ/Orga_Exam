@@ -2926,3 +2926,254 @@ div.modal-wide { max-width: 780px; }
   text-decoration: underline;
 }
 .btn-link:hover { opacity: .8; }
+
+/* ══════════════════════════════════════════════════════════════
+   AFFECTATION DES ÉLÈVES EN SALLES
+   ══════════════════════════════════════════════════════════════ */
+
+/* --- Options bar --- */
+.aff-options-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 18px 0 10px;
+}
+.aff-fieldset {
+  border: 1px solid var(--border, #d8dee9);
+  border-radius: 8px;
+  padding: 10px 16px 12px;
+  background: var(--surface, #fff);
+  min-width: 180px;
+  flex: 1;
+}
+.aff-fieldset legend {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--blue-800, #1e3a5f);
+  padding: 0 6px;
+}
+.aff-fieldset .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  margin-top: 6px;
+}
+.aff-select {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #d8dee9);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #f8fafc;
+}
+
+/* --- Stats globales --- */
+.aff-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-size: 0.88rem;
+  color: var(--blue-800, #1e3a5f);
+}
+
+/* --- Grille des salles preview --- */
+.aff-salles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+.aff-salle-card {
+  border: 1px solid var(--border, #d8dee9);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--surface, #fff);
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+.aff-salle-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.aff-salle-nom {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--blue-900, #0d2240);
+  flex: 1;
+}
+.aff-salle-count {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--blue-700, #1e4d8c);
+  background: #eef3fb;
+  border-radius: 12px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+.aff-salle-classes {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-style: italic;
+}
+.aff-jauge-wrap {
+  height: 5px;
+  background: #e2e8f0;
+  border-radius: 99px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.aff-jauge-bar {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.3s;
+}
+.aff-eleves-liste {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.aff-eleve-chip {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.80rem;
+  padding: 3px 8px;
+  color: #334155;
+}
+.aff-vide {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* --- Groupes de séparation --- */
+.groupe-sep-card {
+  border: 1px solid var(--border, #d8dee9);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 14px;
+  background: var(--surface, #fff);
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+.groupe-sep-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.groupe-sep-nom {
+  flex: 1;
+  min-width: 140px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: #f8fafc;
+  color: var(--blue-900, #0d2240);
+  transition: border-color .15s;
+}
+.groupe-sep-nom:hover,
+.groupe-sep-nom:focus {
+  border-color: var(--accent, #2563eb);
+  background: #fff;
+  outline: none;
+}
+.groupe-warn {
+  font-size: 0.80rem;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.groupe-ok {
+  font-size: 0.80rem;
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  border-radius: 8px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.groupe-sep-membres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-height: 36px;
+  margin-bottom: 12px;
+  padding: 8px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+}
+.groupe-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 20px;
+  padding: 4px 10px 4px 12px;
+  font-size: 0.83rem;
+  color: #1e3a8a;
+}
+.groupe-chip-nom {
+  font-weight: 600;
+}
+.groupe-chip-classe {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+.groupe-chip-del {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color .12s;
+}
+.groupe-chip-del:hover { color: #ef4444; }
+.groupe-vide {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  font-style: italic;
+  align-self: center;
+}
+.groupe-sep-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.groupe-sep-select {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #d8dee9);
+  border-radius: 6px;
+  font-size: 0.88rem;
+  background: #f8fafc;
+}
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .aff-options-bar { flex-direction: column; }
+  .aff-salles-grid { grid-template-columns: 1fr; }
+  .groupe-sep-add { flex-direction: column; }
+}

@@ -34,11 +34,11 @@
         <button class="nav-item" role="tab" data-tab="candidats" aria-selected="false">
           <span class="nav-item-icon">🎓</span><span class="nav-item-label">Candidats</span>
         </button>
-        <button class="nav-item" role="tab" data-tab="salles" aria-selected="false">
-          <span class="nav-item-icon">🚪</span><span class="nav-item-label">Salles &amp; besoins</span>
-        </button>
         <button class="nav-item" role="tab" data-tab="amenagements" aria-selected="false">
           <span class="nav-item-icon">♿</span><span class="nav-item-label">Aménagements</span>
+        </button>
+        <button class="nav-item" role="tab" data-tab="salles" aria-selected="false">
+          <span class="nav-item-icon">🚪</span><span class="nav-item-label">Salles &amp; besoins</span>
         </button>
         <button class="nav-item" role="tab" data-tab="surveillants" aria-selected="false">
           <span class="nav-item-icon">👥</span><span class="nav-item-label">Surveillants</span>
@@ -156,6 +156,59 @@
           <h3 class="sous-titre">🚶 Couloirs à surveiller</h3>
           <p class="section-desc">La surveillance de couloir démarre à l’heure où les surveillants doivent être en salle, puis tourne par <strong>créneaux d’1 heure</strong> jusqu’à la fin de l’épreuve. L’affectation se fait dans le module Répartition (automatique ou manuelle).</p>
           <div id="zone-couloirs"></div>
+
+          <!-- ───── SOUS-MODULE : AFFECTATION DES ÉLÈVES EN SALLES ───── -->
+          <h3 class="sous-titre">🎓 Affectation des élèves en salles</h3>
+          <p class="section-desc">Affectez nominativement les candidats dans les salles ordinaires. Disponible après import de la liste des candidats.</p>
+
+          <!-- Sous-navigation interne -->
+          <div class="vue-switcher" style="margin-top:16px">
+            <button class="vue-btn active" id="aff-btn-groupes">🚫 Groupes de séparation</button>
+            <button class="vue-btn" id="aff-btn-affecter">⚡ Affecter en salles</button>
+          </div>
+
+          <!-- Panel groupes de séparation -->
+          <div id="aff-panel-groupes">
+            <div class="section-header" style="margin-bottom:12px;margin-top:16px">
+              <div>
+                <p class="section-desc" style="margin:0">Définissez des groupes d'au moins 2 élèves que l'algorithme placera dans des salles différentes (ex. : fratrie, triche suspectée, conflits).</p>
+              </div>
+              <button class="btn btn-primary" id="btn-add-groupe">+ Nouveau groupe</button>
+            </div>
+            <div id="zone-groupes"></div>
+          </div>
+
+          <!-- Panel affectation -->
+          <div id="aff-panel-affecter" hidden>
+            <div class="aff-options-bar">
+              <fieldset class="aff-fieldset">
+                <legend>Épreuve</legend>
+                <select id="aff-epreuve" class="aff-select">
+                  <option value="toutes">— Toutes les épreuves —</option>
+                </select>
+              </fieldset>
+              <fieldset class="aff-fieldset">
+                <legend>Ordre de placement</legend>
+                <label class="checkbox-label"><input type="radio" name="aff-ordre" value="alpha" checked> Alphabétique</label>
+                <label class="checkbox-label"><input type="radio" name="aff-ordre" value="classe"> Par classe (puis alpha)</label>
+              </fieldset>
+              <fieldset class="aff-fieldset">
+                <legend>Stratégie de répartition</legend>
+                <label class="checkbox-label"><input type="radio" name="aff-strategie" value="remplir" checked> Compléter les salles une par une</label>
+                <label class="checkbox-label"><input type="radio" name="aff-strategie" value="repartir"> Répartir dans toutes les salles</label>
+              </fieldset>
+              <fieldset class="aff-fieldset">
+                <legend>Options</legend>
+                <label class="checkbox-label"><input type="checkbox" id="aff-conserver"> Conserver les affectations existantes</label>
+              </fieldset>
+            </div>
+            <div class="btn-group" style="margin:14px 0 20px">
+              <button class="btn btn-accent" id="btn-lancer-affectation">⚡ Lancer l'affectation</button>
+              <button class="btn btn-outline" id="btn-vider-affectation">🗑 Tout effacer</button>
+            </div>
+            <div id="aff-preview"></div>
+          </div>
+          <!-- ───── FIN AFFECTATION ÉLÈVES ───── -->
         </section>
 
         <!-- ═══ ONGLET AMÉNAGEMENTS ═══ -->
@@ -715,6 +768,7 @@
   <script src="js/parametres.js"></script>
   <script src="js/salles.js"></script>
   <script src="js/surveillants.js"></script>
+  <script src="js/affectation.js"></script>
   <script src="js/repartition.js"></script>
   <script src="js/recap.js"></script>
   <script src="js/print.js"></script>

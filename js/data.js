@@ -39,6 +39,7 @@ const AppData = {
   amenagements : [],
   candidats    : [],   // liste nominative (module candidats) — voir section CANDIDATS
   surveillants : [],
+  groupesSeparation : [], // [{ id, nom, candidatIds[] }] — élèves à ne pas placer dans la même salle
   affectations : {},   // { [epreuveId]: { [salleId]: [survId, ...] } }
   reserves     : {},   // { [epreuveId]: [survId, ...] } — personnels de réserve
   couloirs : [],            // [{ id, nom, nbSurveillants }] — couloirs à surveiller
@@ -47,7 +48,7 @@ const AppData = {
   reservesTT   : {},   // { [epreuveId]: [survId, ...] } — réserve TIERS TEMPS (présente jusqu'à la fin du TT)
   verrous      : {},   // { "epId:salleId|R|RT:survId": true } — affectations figées (préservées par l'algorithme)
 
-  _nextId : { epreuve: 1, salle: 1, amenagement: 1, surveillant: 1, candidat: 1 },
+  _nextId : { epreuve: 1, salle: 1, amenagement: 1, surveillant: 1, candidat: 1, groupe: 1 },
 
   // ────────────────────────────────────────────────────────────
   // Helpers
@@ -444,6 +445,58 @@ const AppData = {
   },
   candidatPourAmenagement(amId) {
     return this.candidats.find(c => c.amenagementId === amId) || null;
+  },
+
+  // ────────────────────────────────────────────────────────────
+  // GROUPES DE SÉPARATION — élèves à ne pas placer ensemble
+  // ────────────────────────────────────────────────────────────
+
+  addGroupeSeparation(nom) {
+    const g = { id: this._nextId.groupe++, nom: (nom || '').trim(), candidatIds: [] };
+    this.groupesSeparation.push(g);
+    return g;
+  },
+
+  updateGroupeSeparation(id, nom) {
+    const g = this.groupesSeparation.find(x => x.id === id);
+    if (!g) return null;
+    g.nom = (nom || '').trim();
+    return g;
+  },
+
+  deleteGroupeSeparation(id) {
+    const i = this.groupesSeparation.findIndex(x => x.id === id);
+    if (i === -1) return false;
+    this.groupesSeparation.splice(i, 1);
+    return true;
+  },
+
+  getGroupeSeparation(id) { return this.groupesSeparation.find(x => x.id === id) || null; },
+
+  addCandidatGroupe(groupeId, candidatId) {
+    const g = this.getGroupeSeparation(groupeId);
+    if (!g || g.candidatIds.includes(candidatId)) return false;
+    g.candidatIds.push(candidatId);
+    return true;
+  },
+
+  removeCandidatGroupe(groupeId, candidatId) {
+    const g = this.getGroupeSeparation(groupeId);
+    if (!g) return false;
+    const i = g.candidatIds.indexOf(candidatId);
+    if (i === -1) return false;
+    g.candidatIds.splice(i, 1);
+    return true;
+  },
+
+  /** Nettoie les groupes des candidats qui n'existent plus */
+  nettoyerGroupesSeparation() {
+    const ids = new Set(this.candidats.map(c => c.id));
+    this.groupesSeparation.forEach(g => {
+      g.candidatIds = g.candidatIds.filter(id => ids.has(id));
+    });
+    // Supprimer les groupes devenus vides ou singleton
+    this.groupesSeparation = this.groupesSeparation.filter(g => g.candidatIds.length >= 2);
   },
 
   /** Effectif d'une salle : DÉRIVÉ de la liste nominative si des candidats y sont
@@ -973,6 +1026,7 @@ const AppData = {
       amenagements: this.amenagements,
       candidats: this.candidats,
       surveillants: this.surveillants,
+      groupesSeparation: this.groupesSeparation,
       affectations: this.affectations,
       reserves: this.reserves,
       reservesTT: this.reservesTT,
@@ -994,6 +1048,7 @@ const AppData = {
     this.amenagements = obj.amenagements || [];
     this.candidats = obj.candidats || [];
     this.surveillants = obj.surveillants || [];
+    this.groupesSeparation = obj.groupesSeparation || [];
     this.affectations = obj.affectations || {};
     this.reserves = obj.reserves || {};
     this.reservesTT = obj.reservesTT || {};
