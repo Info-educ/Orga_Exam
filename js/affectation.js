@@ -204,33 +204,79 @@ const Affectation = {
     });
 
     // ── Fonction d'affectation pour UNE épreuve donnée ──────────────────
-    // sallesEp   : salles disponibles pour cette épreuve (déjà filtrées)
-    // affSalleGlobal : Map<salleId, Set<candId>> PARTAGÉE entre épreuves communes
-    //                  null => créer un contexte local (épreuves spécialité)
+    // Trois flux : aménagés avec salle fixée / aménagés sans salle / ordinaires
     const affecterEpreuve = (ep, sallesEp, affSalleGlobal) => {
       let aff = 0, imp = 0;
+      const tousCandidat = AppData.candidatsPourEpreuve(ep);
 
-      // Candidats concernés par cette épreuve
-      let candidats = AppData.candidatsPourEpreuve(ep).filter(c => {
+      // ── FLUX 1 : aménagés avec salle fixée → affectation directe ────
+      tousCandidat.forEach(c => {
         const am = AppData.amenagementDuCandidat(c);
-        return !(am && am.salleId);  // exclus : aménagés avec salle fixée
+        if (!am || !am.salleId) return;
+        if (conserver && (c.salleParEpreuve || {})[ep.id]) return;
+        if (!c.salleParEpreuve) c.salleParEpreuve = {};
+        c.salleParEpreuve[ep.id] = am.salleId;
+        aff++;
       });
 
-      // Gestion \"conserver\"
+      // ── FLUX 2 : aménagés SANS salle fixée → salles aménagées ──────
+      const sallesAmenagees = AppData.sallesPourEpreuve(ep.id)
+        .filter(s => s.type === 'amenagee');
+
+      let candidatsAmenSansSalle = tousCandidat.filter(c => {
+        const am = AppData.amenagementDuCandidat(c);
+        return am && !am.salleId;
+      });
       if (!conserver) {
-        candidats.forEach(c => {
-          if (!c.salleParEpreuve) return;
+        candidatsAmenSansSalle.forEach(c => {
+          if (!c.salleParEpreuve) c.salleParEpreuve = {};
           delete c.salleParEpreuve[ep.id];
         });
       } else {
-        candidats = candidats.filter(c => !(c.salleParEpreuve || {})[ep.id]);
+        candidatsAmenSansSalle = candidatsAmenSansSalle.filter(c => !(c.salleParEpreuve || {})[ep.id]);
       }
 
+      if (candidatsAmenSansSalle.length) {
+        if (sallesAmenagees.length) {
+          const capAm = {};
+          const affAm = {};
+          sallesAmenagees.forEach(s => {
+            affAm[s.id] = new Set(
+              AppData.candidats.filter(c => (c.salleParEpreuve || {})[ep.id] === s.id).map(c => c.id)
+            );
+            capAm[s.id] = Math.max(0, s.capacite - affAm[s.id].size);
+          });
+          trierCandidats(candidatsAmenSansSalle).forEach(c => {
+            if ((c.salleParEpreuve || {})[ep.id]) return;
+            const dispo = sallesAmenagees.filter(s => capAm[s.id] > 0);
+            if (!dispo.length) { imp++; return; }
+            dispo.sort(stratVal === 'remplir'
+              ? (a, b) => affAm[b.id].size - affAm[a.id].size || a.id - b.id
+              : (a, b) => affAm[a.id].size - affAm[b.id].size || a.id - b.id);
+            const salle = dispo[0];
+            if (!c.salleParEpreuve) c.salleParEpreuve = {};
+            c.salleParEpreuve[ep.id] = salle.id;
+            affAm[salle.id].add(c.id);
+            capAm[salle.id]--;
+            aff++;
+          });
+        } else {
+          // Pas de salle aménagée disponible → comptés impossibles
+          candidatsAmenSansSalle.forEach(() => imp++);
+        }
+      }
+
+      // ── FLUX 3 : candidats ordinaires → salles ordinaires ───────────
+      let candidats = tousCandidat.filter(c => !AppData.amenagementDuCandidat(c));
+      if (!conserver) {
+        candidats.forEach(c => { if (c.salleParEpreuve) delete c.salleParEpreuve[ep.id]; });
+      } else {
+        candidats = candidats.filter(c => !(c.salleParEpreuve || {})[ep.id]);
+      }
       if (!candidats.length) return { aff, imp };
 
       const sorted = trierCandidats(candidats);
 
-      // Contexte de suivi des places : partagé (commune) ou local (spécialité)
       const affSalle = affSalleGlobal || (() => {
         const m = {};
         sallesEp.forEach(s => { m[s.id] = new Set(); });
@@ -240,15 +286,10 @@ const Affectation = {
         });
         return m;
       })();
-
-      // Initialiser les salles absentes du contexte partagé
       sallesEp.forEach(s => { if (!affSalle[s.id]) affSalle[s.id] = new Set(); });
 
-      // Capacités restantes
       const cap = {};
-      sallesEp.forEach(s => {
-        cap[s.id] = Math.max(0, s.capacite - affSalle[s.id].size);
-      });
+      sallesEp.forEach(s => { cap[s.id] = Math.max(0, s.capacite - affSalle[s.id].size); });
 
       const choisir = (cand) => {
         const interdit = new Set();
@@ -270,7 +311,7 @@ const Affectation = {
       };
 
       sorted.forEach(cand => {
-        if ((cand.salleParEpreuve || {})[ep.id]) return;  // déjà affecté (conserver)
+        if ((cand.salleParEpreuve || {})[ep.id]) return;
         const salle = choisir(cand);
         if (!salle) { imp++; return; }
         if (!cand.salleParEpreuve) cand.salleParEpreuve = {};
@@ -431,11 +472,11 @@ const Affectation = {
             msg: `${c.nom} ${c.prenom} est affecté(e) ici, mais son aménagement spécifie la salle « ${salleAm ? salleAm.nom : '?'} ».`,
           });
         }
-        // Aménagement dans salle ordinaire (warning)
+        // Aménagement (sans salle fixée) placé dans une salle ordinaire → doit être en salle aménagée
         if (am && !am.salleId && s.type === 'ordinaire') {
           alertesSalle[s.id].push({
-            type: 'warning',
-            msg: `${c.nom} ${c.prenom} a un aménagement — vérifiez que cette salle est adaptée.`,
+            type: 'error',
+            msg: `${c.nom} ${c.prenom} a un aménagement et devrait être en salle aménagée (♿), pas en salle ordinaire.`,
           });
         }
       });
@@ -470,6 +511,20 @@ const Affectation = {
     }).length;
     if (sansSalle > 0) {
       alertesGlobal.push({ type: 'warning', msg: `${sansSalle} candidat(s) sans salle affectée.` });
+    }
+
+    // Vérifier qu'il existe une salle aménagée si des candidats avec aménagement (sans salle fixée) existent
+    const nbAmenSansSalle = AppData.candidats.filter(c => {
+      if (epId != null && c.epreuveIds.length && !c.epreuveIds.includes(epId)) return false;
+      const am = AppData.amenagementDuCandidat(c);
+      return am && !am.salleId;
+    }).length;
+    const nbSallesAmenagees = salles.filter(s => s.type === 'amenagee').length;
+    if (nbAmenSansSalle > 0 && nbSallesAmenagees === 0) {
+      alertesGlobal.push({
+        type: 'error',
+        msg: `${nbAmenSansSalle} candidat(s) avec aménagement nécessitent une salle aménagée (♿) — aucune n'est définie.`,
+      });
     }
 
     return { global: alertesGlobal, parSalle: alertesSalle };
