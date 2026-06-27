@@ -213,6 +213,9 @@ const AppData = {
       candidats     : parseInt(f.candidats, 10) || 0,
       nbSurveillants: parseInt(f.nbSurveillants, 10) || 2,
       epreuveIds    : Array.isArray(f.epreuveIds) ? f.epreuveIds.slice() : [],  // [] = toutes
+      // Pour les salles aménagées : quels types d'épreuves accueille-t-elle ?
+      pourCommunes  : f.pourCommunes !== false,   // true par défaut
+      specialites   : Array.isArray(f.specialites) ? f.specialites.slice() : [], // [] = toutes spécialités
       materiel      : (f.materiel || '').trim(),
       notes         : (f.notes || '').trim(),
     };
@@ -229,6 +232,8 @@ const AppData = {
     s.candidats = parseInt(f.candidats, 10) || 0;
     s.nbSurveillants = parseInt(f.nbSurveillants, 10) || s.nbSurveillants;
     if (Array.isArray(f.epreuveIds)) s.epreuveIds = f.epreuveIds.slice();
+    s.pourCommunes = f.pourCommunes !== false;
+    s.specialites  = Array.isArray(f.specialites) ? f.specialites.slice() : (s.specialites || []);
     s.materiel = (f.materiel || '').trim();
     s.notes = (f.notes || '').trim();
     return s;
@@ -256,6 +261,35 @@ const AppData = {
    *  (algorithme, affiches, fiches de préparation…) filtrent localement. */
   sallesPourEpreuve(epId) {
     return this.salles.filter(s => !s.epreuveIds.length || s.epreuveIds.includes(epId));
+  },
+
+  /** Salles AMÉNAGÉES (type=amenagee) pertinentes pour une épreuve donnée.
+   *  Croise : epreuveIds, pourCommunes et specialites.
+   *  - Épreuve commune  → salles avec pourCommunes:true
+   *  - Épreuve spécialité → salles dont specialites[] contient la spécialité (ou specialites vide = toutes)
+   *  Dans les deux cas, le filtre epreuveIds s'applique en plus. */
+  sallesAmenageesPourEpreuve(ep) {
+    const epObj = typeof ep === 'object' ? ep : this.getEpreuve(ep);
+    if (!epObj) return [];
+    const isSpecialite = epObj.typeAffectation === 'specialite' && (epObj.optionsLiees || []).length > 0;
+    const epSpecLower  = (epObj.optionsLiees || []).map(o => String(o).trim().toLowerCase());
+
+    return this.salles.filter(s => {
+      if (s.type !== 'amenagee') return false;
+      // Filtre epreuveIds de la salle
+      if (s.epreuveIds.length && !s.epreuveIds.includes(epObj.id)) return false;
+      if (!isSpecialite) {
+        // Épreuve commune : la salle doit être marquée "pour les communes"
+        return s.pourCommunes !== false;
+      } else {
+        // Épreuve spécialité : la salle couvre cette spécialité si
+        //   - specialites[] est vide (= toutes les spécialités)
+        //   - ou au moins une de ses spécialités correspond à l'épreuve
+        const salleSpecs = (s.specialites || []).map(o => String(o).trim().toLowerCase());
+        if (!salleSpecs.length) return true;
+        return epSpecLower.some(sp => salleSpecs.includes(sp));
+      }
+    });
   },
 
   /** Besoins fournitures calculés pour une salle */
@@ -1068,7 +1102,9 @@ const AppData = {
     this.epreuves = (obj.epreuves || []).map(e => ({
       ttDebut: null, ttFin: null, typeAffectation: "commune", optionsLiees: [], ...e,
     }));
-    this.salles = obj.salles || [];
+    this.salles = (obj.salles || []).map(s => ({
+      pourCommunes: true, specialites: [], ...s,
+    }));
     this.amenagements = obj.amenagements || [];
     this.candidats = obj.candidats || [];
     this.surveillants = obj.surveillants || [];

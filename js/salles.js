@@ -16,7 +16,10 @@ const Salles = {
     // Salles
     $('#btn-add-salle').addEventListener('click', () => this.ouvrirSalle());
     $('#form-salle').addEventListener('submit', (e) => { e.preventDefault(); this.enregistrerSalle(); });
-    $('#salle-type').addEventListener('change', () => this._suggererSurveillants());
+    $('#salle-type').addEventListener('change', () => {
+      this._suggererSurveillants();
+      this._toggleUsageAmenagee();
+    });
 
     // Aménagements
     $('#btn-add-amenagement').addEventListener('click', () => this.ouvrirAmenagement());
@@ -40,17 +43,83 @@ const Salles = {
     $('#salle-notes').value = s ? s.notes : '';
 
     // Épreuves concernées (vide = toutes)
+    this._rendreEpreuvesSalle(s);
+    // Zone "Usage aménagée" (commune / spécialités)
+    this._rendreUsageAmenagee(s);
+    this._toggleUsageAmenagee();
+
+    ouvrirModal('modal-salle');
+  },
+
+  _rendreEpreuvesSalle(s) {
     const zone = $('#salle-epreuves');
     if (!AppData.epreuves.length) {
       zone.innerHTML = '<span class="field-hint">Aucune épreuve définie : la salle sera utilisée pour toutes les épreuves.</span>';
     } else {
-      zone.innerHTML = AppData.epreuves.map(ep => `
-        <label class="checkbox-label">
+      zone.innerHTML = AppData.epreuves.map(ep => {
+        const typeLabel = ep.typeAffectation === 'specialite' && ep.optionsLiees.length
+          ? `🎓 ${ep.optionsLiees.join(', ')}`
+          : '👥 Commune';
+        return `<label class="checkbox-label">
           <input type="checkbox" value="${ep.id}" ${s && s.epreuveIds.includes(ep.id) ? 'checked' : ''}>
           ${escHtml(AppData.formatDateCourt(ep.date))} — ${escHtml(ep.matiere)}
-        </label>`).join('');
+          <span class="field-hint" style="display:inline;margin-left:4px">(${escHtml(typeLabel)})</span>
+        </label>`;
+      }).join('');
     }
-    ouvrirModal('modal-salle');
+  },
+
+  /** Zone visible uniquement pour les salles aménagées : pour quels types d'épreuves ? */
+  _rendreUsageAmenagee(s) {
+    const zone = $('#salle-usage-amenagee');
+    if (!zone) return;
+    const pourCommunes = s ? s.pourCommunes !== false : true;
+    const salleSpecs   = s ? (s.specialites || []) : [];
+    const specialites  = AppData.cataloguerOptions();
+
+    let html = `<div class="form-group full" style="margin-top:8px">
+      <label style="font-weight:600;margin-bottom:6px;display:block">Usage de cette salle aménagée (♿)</label>
+      <label class="checkbox-label" style="margin-bottom:6px">
+        <input type="checkbox" id="salle-pour-communes" ${pourCommunes ? 'checked' : ''}>
+        <strong>Épreuves communes</strong> — accueille les candidats TT des épreuves communes
+      </label>`;
+
+    if (specialites.length) {
+      html += `<div style="margin-top:4px;margin-bottom:4px"><label style="font-size:.88rem;color:var(--gray-600);font-weight:600">Spécialités couvertes :</label>
+        <div id="salle-specialites-liste" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">`;
+      specialites.forEach(sp => {
+        const key     = sp.trim().toLowerCase();
+        const checked = salleSpecs.some(s2 => String(s2).trim().toLowerCase() === key);
+        html += `<label class="spec-chip" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid ${checked ? 'var(--primary-400,#60a5fa)' : 'var(--gray-300)'};background:${checked ? 'var(--primary-50,#eff6ff)' : 'var(--gray-50)'};cursor:pointer;font-size:.88rem;user-select:none;font-weight:${checked ? '600' : 'normal'}">
+          <input type="checkbox" name="salle-spec" value="${escHtml(sp)}" ${checked ? 'checked' : ''}> ${escHtml(sp)}
+        </label>`;
+      });
+      html += `</div>
+        <p class="field-hint" style="margin-top:4px">
+          Cochez les spécialités dont les candidats TT composent dans cette salle.
+          Si <em>aucune case cochée</em>, la salle couvre <strong>toutes les spécialités</strong>.
+        </p>`;
+    } else {
+      html += `<p class="field-hint" style="margin-top:4px">Aucune spécialité importée — importez les candidats pour pouvoir cibler les spécialités.</p>`;
+    }
+    html += `</div>`;
+    zone.innerHTML = html;
+
+    // Style dynamique sur les chips
+    zone.querySelectorAll('input[name="salle-spec"]').forEach(cb => {
+      const lbl = cb.closest('label');
+      cb.addEventListener('change', () => {
+        lbl.style.background   = cb.checked ? 'var(--primary-50,#eff6ff)' : 'var(--gray-50)';
+        lbl.style.borderColor  = cb.checked ? 'var(--primary-400,#60a5fa)' : 'var(--gray-300)';
+        lbl.style.fontWeight   = cb.checked ? '600' : 'normal';
+      });
+    });
+  },
+
+  _toggleUsageAmenagee() {
+    const type = $('#salle-type').value;
+    const zone = $('#salle-usage-amenagee');
+    if (zone) zone.hidden = (type !== 'amenagee');
   },
 
   _suggererSurveillants() {
@@ -60,14 +129,21 @@ const Salles = {
   },
 
   enregistrerSalle() {
+    const type = $('#salle-type').value;
     const epreuveIds = $$('#salle-epreuves input:checked').map(c => parseInt(c.value, 10));
+    const pourCommunes = type === 'amenagee' ? (!!$('#salle-pour-communes')?.checked) : true;
+    const specialites  = type === 'amenagee'
+      ? Array.from($$('#salle-usage-amenagee input[name="salle-spec"]:checked')).map(cb => cb.value)
+      : [];
     const f = {
       nom: $('#salle-nom').value,
-      type: $('#salle-type').value,
+      type,
       capacite: $('#salle-capacite').value,
       candidats: $('#salle-candidats').value,
       nbSurveillants: $('#salle-nb-surv').value,
       epreuveIds,
+      pourCommunes,
+      specialites,
       materiel: $('#salle-materiel').value,
       notes: $('#salle-notes').value,
     };
@@ -111,16 +187,35 @@ const Salles = {
       return;
     }
 
-    const badgesType = { ordinaire: '', amenagee: '<span class="badge badge-tt">♿ Tiers temps</span>', secretariat: '<span class="badge badge-secr">🗂 Secrétariat</span>' };
+    const badgesType = {
+      ordinaire   : '',
+      amenagee    : '<span class="badge badge-tt">♿ Tiers temps</span>',
+      secretariat : '<span class="badge badge-secr">🗂 Secrétariat</span>',
+    };
 
     tbody.innerHTML = AppData.salles.map(s => {
       const b = AppData.besoinsSalle(s);
       const eps = !s.epreuveIds.length ? 'Toutes'
         : s.epreuveIds.map(id => { const ep = AppData.getEpreuve(id); return ep ? escHtml(ep.matiere) : ''; }).filter(Boolean).join(', ');
+
+      // Ligne d'usage pour les salles aménagées
+      let usageAm = '';
+      if (s.type === 'amenagee') {
+        const parties = [];
+        if (s.pourCommunes !== false) parties.push('<span class="badge" style="background:#f0fdf4;color:#166534;border:1px solid #86efac">👥 Communes</span>');
+        const specs = s.specialites || [];
+        if (specs.length) {
+          specs.forEach(sp => parties.push(`<span class="badge" style="background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd">🎓 ${escHtml(sp)}</span>`));
+        } else if (s.pourCommunes === false) {
+          parties.push('<span class="badge" style="background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd">🎓 Toutes spécialités</span>');
+        }
+        if (parties.length) usageAm = `<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">${parties.join('')}</div>`;
+      }
+
       return `
         <tr>
           <td>${s.id}</td>
-          <td><strong>${escHtml(s.nom)}</strong> ${badgesType[s.type] || ''}</td>
+          <td><strong>${escHtml(s.nom)}</strong> ${badgesType[s.type] || ''}${usageAm}</td>
           <td class="text-center">${s.capacite || '—'}</td>
           <td class="text-center"><strong>${s.candidats || 0}</strong></td>
           <td class="text-center">${s.type === 'secretariat' ? '—' : `${b.sujets} suj. · ${b.copies} cop. · ${b.brouillons} brouil.`}</td>
