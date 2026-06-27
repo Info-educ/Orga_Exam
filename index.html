@@ -102,7 +102,7 @@
           <div class="counter-bar"><span><span id="count-epreuves">0</span> épreuve(s)</span></div>
           <div class="table-wrapper">
             <table class="data-table">
-              <thead><tr><th>#</th><th>Matière</th><th>Début</th><th>Durée</th><th>Fin</th><th>Fin tiers temps</th><th class="col-actions">Actions</th></tr></thead>
+              <thead><tr><th>#</th><th>Matière</th><th>Début</th><th>Durée</th><th>Fin</th><th>Fin tiers temps</th><th>Type</th><th class="col-actions">Actions</th></tr></thead>
               <tbody id="tbody-epreuves"></tbody>
             </table>
           </div>
@@ -514,6 +514,21 @@
           </div>
         </div>
         <div class="field-hint" id="ep-apercu"></div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="ep-type-affectation">Type d'épreuve</label>
+            <select id="ep-type-affectation">
+              <option value="commune">Commune (tous candidats, même salle)</option>
+              <option value="specialite">Spécialité (candidats filtrés par spécialité)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group full" id="ep-group-specialites" hidden>
+          <label>Spécialités concernées <span class="field-hint" style="display:inline">(cochez les spécialités qui passent cette épreuve)</span></label>
+          <div id="ep-specialites-liste" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;padding:8px;border:1px solid var(--gray-200);border-radius:6px;min-height:36px;">
+            <span style="color:var(--gray-400);font-size:.88rem" id="ep-specialites-vide">Importez d'abord les candidats pour voir leurs spécialités.</span>
+          </div>
+        </div>
         <div class="form-group full">
           <label for="ep-notes">Notes</label>
           <input type="text" id="ep-notes" placeholder="Calculatrice autorisée, dictionnaire…">

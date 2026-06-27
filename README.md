@@ -109,7 +109,19 @@ Application **sans dépendance serveur** ; seule librairie externe :
 ## 🔧 Évolutions envisageables
 
 L'architecture en modules indépendants facilite les ajouts. Suite prévue pour le module candidats
-(**P1 / P2**) : liaison épreuve ↔ option (auto-détection des libellés + assignation manuelle par
-groupe, sans nomenclature figée), génération des **numéros d'anonymat** et des bordereaux de
-correction anonymisés, affectation **nominative** en salle, gestion du **jour J** (présence/absence),
-plan de salle nominatif et convocations individuelles.
+(**P1 / P2**) : génération des **numéros d'anonymat** et des bordereaux de correction anonymisés,
+gestion du **jour J** (présence/absence), plan de salle nominatif et convocations individuelles.
+
+---
+
+## 📋 Historique des versions
+
+### v9 — Épreuves communes vs Spécialités + correctif affectation
+- **Correctif majeur affectation** : les candidats restent désormais dans la même salle pour toutes les épreuves communes (le contexte de remplissage est partagé entre épreuves communes, isolé pour les épreuves de spécialité).
+- **Nouveau champ `typeAffectation`** sur chaque épreuve : `commune` (tous candidats, même salle) ou `specialite` (filtrés par spécialité, salles dédiées).
+- **Nouveau champ `optionsLiees`** : liste des libellés de spécialités concernées (ex. « Mathématiques », « NSI ») sélectionnés via cases à cocher dans le formulaire épreuve.
+- **Colonnes CSV renommées** : `Option1…Option6` → `Spécialité1…Spécialité6` dans le modèle téléchargeable (les anciens fichiers Option1…6 restent acceptés pour compatibilité).
+- **Tableau épreuves** : nouvelle colonne « Type » avec badge 👥 Commune / 🎓 Spéc. et liste des spécialités concernées au survol.
+- **Vue Kanban affectation** : indicateur du type d'épreuve sélectionnée + compteur candidats ajusté selon la spécialité.
+- **Rétrocompatibilité totale** : les sessions v8 et antérieures sont chargées sans perte (les épreuves existantes reçoivent automatiquement `typeAffectation: 'commune'`).
+

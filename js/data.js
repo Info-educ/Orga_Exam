@@ -124,14 +124,18 @@ const AppData = {
 
   addEpreuve(f) {
     const e = {
-      id         : this._nextId.epreuve++,
-      date       : f.date || '',
-      matiere    : (f.matiere || '').trim(),
-      heureDebut : f.heureDebut || '09:00',
-      duree      : parseInt(f.duree, 10) || 60,
-      ttDebut    : (f.ttDebut || '').trim() || null,
-      ttFin      : (f.ttFin || '').trim() || null,
-      notes      : (f.notes || '').trim(),
+      id              : this._nextId.epreuve++,
+      date            : f.date || '',
+      matiere         : (f.matiere || '').trim(),
+      heureDebut      : f.heureDebut || '09:00',
+      duree           : parseInt(f.duree, 10) || 60,
+      ttDebut         : (f.ttDebut || '').trim() || null,
+      ttFin           : (f.ttFin || '').trim() || null,
+      notes           : (f.notes || '').trim(),
+      // Affectation : 'commune' (même salle toutes épreuves communes) | 'specialite' (filtré par spécialité)
+      typeAffectation : f.typeAffectation || 'commune',
+      // Pour typeAffectation='specialite' : liste des libellés de spécialité concernés ([] = aucun filtre)
+      optionsLiees    : Array.isArray(f.optionsLiees) ? f.optionsLiees.slice() : [],
     };
     this.epreuves.push(e);
     this._sortEpreuves();
@@ -148,6 +152,8 @@ const AppData = {
     e.ttDebut = (f.ttDebut || '').trim() || null;
     e.ttFin = (f.ttFin || '').trim() || null;
     e.notes = (f.notes || '').trim();
+    e.typeAffectation = f.typeAffectation || e.typeAffectation || 'commune';
+    e.optionsLiees = Array.isArray(f.optionsLiees) ? f.optionsLiees.slice() : (e.optionsLiees || []);
     this._sortEpreuves();
     return e;
   },
@@ -440,6 +446,24 @@ const AppData = {
     return [...set.values()].sort((a, b) => a.localeCompare(b, 'fr'));
   },
 
+  /** Retourne les candidats qui doivent passer l'épreuve ep.
+   *  - epreuve commune   : tous les candidats (sauf ceux explicitement exclus via epreuveIds)
+   *  - epreuve spécialité: candidats dont options[] contient au moins une des optionsLiees de l'épreuve
+   *                         (si optionsLiees est vide → même comportement que commune)
+   *  Le filtre epreuveIds sur le candidat reste toujours prioritaire. */
+  candidatsPourEpreuve(ep) {
+    return this.candidats.filter(c => {
+      // Exclusion explicite via epreuveIds du candidat
+      if (c.epreuveIds && c.epreuveIds.length && !c.epreuveIds.includes(ep.id)) return false;
+      // Filtre spécialité
+      if (ep.typeAffectation === 'specialite' && ep.optionsLiees && ep.optionsLiees.length) {
+        const opts = (c.options || []).map(o => String(o).trim().toLowerCase());
+        return ep.optionsLiees.some(ol => opts.includes(String(ol).trim().toLowerCase()));
+      }
+      return true;
+    });
+  },
+
   amenagementDuCandidat(c) {
     return c && c.amenagementId ? this.getAmenagement(c.amenagementId) : null;
   },
@@ -534,12 +558,12 @@ const AppData = {
         sexe        : r['Sexe'] ?? '',
         dateNaissance,
         classe      : r['Classe'] ?? r['Division'] ?? '',
-        option1: r['Option1'] ?? r['Option 1'] ?? '',
-        option2: r['Option2'] ?? r['Option 2'] ?? '',
-        option3: r['Option3'] ?? r['Option 3'] ?? '',
-        option4: r['Option4'] ?? r['Option 4'] ?? '',
-        option5: r['Option5'] ?? r['Option 5'] ?? '',
-        option6: r['Option6'] ?? r['Option 6'] ?? '',
+        option1: r['Spécialité1'] ?? r['Specialite1'] ?? r['Spécialité 1'] ?? r['Specialite 1'] ?? r['Option1'] ?? r['Option 1'] ?? '',
+        option2: r['Spécialité2'] ?? r['Specialite2'] ?? r['Spécialité 2'] ?? r['Specialite 2'] ?? r['Option2'] ?? r['Option 2'] ?? '',
+        option3: r['Spécialité3'] ?? r['Specialite3'] ?? r['Spécialité 3'] ?? r['Specialite 3'] ?? r['Option3'] ?? r['Option 3'] ?? '',
+        option4: r['Spécialité4'] ?? r['Specialite4'] ?? r['Spécialité 4'] ?? r['Specialite 4'] ?? r['Option4'] ?? r['Option 4'] ?? '',
+        option5: r['Spécialité5'] ?? r['Specialite5'] ?? r['Spécialité 5'] ?? r['Specialite 5'] ?? r['Option5'] ?? r['Option 5'] ?? '',
+        option6: r['Spécialité6'] ?? r['Specialite6'] ?? r['Spécialité 6'] ?? r['Specialite 6'] ?? r['Option6'] ?? r['Option 6'] ?? '',
       });
 
       const txtAmen = String(r['Aménagements'] ?? r['Amenagements'] ?? '').trim();
@@ -1042,7 +1066,7 @@ const AppData = {
     if (!obj || obj.app !== 'orga-examens') throw new Error('Fichier de session non reconnu.');
     this.params = { ...this.params, ...(obj.params || {}) };
     this.epreuves = (obj.epreuves || []).map(e => ({
-      ttDebut: null, ttFin: null, ...e,
+      ttDebut: null, ttFin: null, typeAffectation: "commune", optionsLiees: [], ...e,
     }));
     this.salles = obj.salles || [];
     this.amenagements = obj.amenagements || [];
@@ -1104,10 +1128,10 @@ const AppData = {
     XLSX.utils.book_append_sheet(wb, wsSa, 'Salles');
 
     // Feuille Élèves (module candidats) — colonnes alignées sur un export SIECLE,
-    // enrichies de Classe et d'options jusqu'à 6 (spécialités + LV + options facultatives d'un lycée).
+    // enrichies de Classe et de spécialités jusqu'à 6 (spécialités + LV + options facultatives d'un lycée).
     const wsE = XLSX.utils.aoa_to_sheet([
       ['Sexe', 'Nom de famille', 'Prénom', 'Date Naissance', 'Classe', 'Aménagements',
-       'Option1', 'Option2', 'Option3', 'Option4', 'Option5', 'Option6'],
+       'Spécialité1', 'Spécialité2', 'Spécialité3', 'Spécialité4', 'Spécialité5', 'Spécialité6'],
       ['F', 'MARTIN', 'Léa', '12/05/2008', 'TG1', 'Tiers temps',
        'Mathématiques', 'Physique-Chimie', 'SES', 'LVA Anglais', 'LVB Espagnol', 'Maths complémentaires'],
       ['M', 'DURAND', 'Hugo', '03/11/2008', 'TG2', '',
@@ -1127,8 +1151,9 @@ const AppData = {
       ['• Seuls Nom de famille et Prénom sont requis ; les autres colonnes sont facultatives.'],
       ['• Date Naissance : JJ/MM/AAAA (sert au dédoublonnage nom+prénom+date, faute d\u2019INE).'],
       ['• Aménagements : texte libre ; crée automatiquement une fiche dans l\u2019onglet Aménagements.'],
-      ['• Option1 à Option6 : libellés libres (spécialités, LV, options). L\u2019appli les découvre'],
-      ['  et permet de relier chaque épreuve aux options concernées — aucune nomenclature figée.'],
+      ['• Spécialité1 à Spécialité6 : libellés libres (spécialités, LV, options). L\u2019appli les découvre'],
+      ['  et permet de relier chaque épreuve aux spécialités concernées — aucune nomenclature figée.'],
+      ['  (Les colonnes Option1…Option6 sont aussi acceptées pour compatibilité avec les anciens fichiers.)'],
       ['• Colonnes ignorées si vides. Réimporter le même fichier ne crée pas de doublon.'],
       [''],
       ['RGPD : données traitées localement sur ce poste, jamais transmises. À conserver le temps'],

@@ -22,6 +22,7 @@ const Parametres = {
       $('#' + id).addEventListener('input', () => this._majApercuHoraires()));
     ['ep-tt-debut', 'ep-tt-fin'].forEach(id =>
       $('#' + id).addEventListener('input', () => this._majApercuHoraires()));
+    $('#ep-type-affectation')?.addEventListener('change', () => this._toggleSpecialites());
   },
 
   ouvrir() {
@@ -84,8 +85,58 @@ const Parametres = {
           ep && ep.ttDebut ? ep.ttDebut : (ep ? ep.heureDebut : '09:00'),
           AppData.dureeTiersTemps(ep ? ep.duree : 120));
     $('#ep-notes').value = ep ? ep.notes : '';
+    // Type d'épreuve et spécialités
+    const typeAff = ep ? (ep.typeAffectation || 'commune') : 'commune';
+    $('#ep-type-affectation').value = typeAff;
+    this._rendreSpecialites(ep ? (ep.optionsLiees || []) : []);
+    this._toggleSpecialites();
     this._majApercuHoraires();
     ouvrirModal('modal-epreuve');
+  },
+
+  _toggleSpecialites() {
+    const isSpec = $('#ep-type-affectation').value === 'specialite';
+    const grp = $('#ep-group-specialites');
+    if (grp) grp.hidden = !isSpec;
+  },
+
+  /** Peuple la liste des cases à cocher spécialités */
+  _rendreSpecialites(selectedLabels = []) {
+    const zone = $('#ep-specialites-liste');
+    const vide = $('#ep-specialites-vide');
+    if (!zone) return;
+    const specialites = AppData.cataloguerOptions();
+    if (!specialites.length) {
+      if (vide) vide.hidden = false;
+      // Ne retirer que les checkboxes précédemment générées
+      zone.querySelectorAll('label.spec-chip').forEach(el => el.remove());
+      return;
+    }
+    if (vide) vide.hidden = true;
+    zone.querySelectorAll('label.spec-chip').forEach(el => el.remove());
+    const selSet = new Set(selectedLabels.map(s => String(s).trim().toLowerCase()));
+    specialites.forEach(sp => {
+      const key = sp.trim().toLowerCase();
+      const lbl = document.createElement('label');
+      lbl.className = 'spec-chip';
+      lbl.style.cssText = 'display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid var(--gray-300);background:var(--gray-50);cursor:pointer;font-size:.88rem;user-select:none;';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = sp;
+      cb.checked = selSet.has(key);
+      cb.addEventListener('change', () => {
+        lbl.style.background = cb.checked ? 'var(--primary-50,#eff6ff)' : 'var(--gray-50)';
+        lbl.style.borderColor = cb.checked ? 'var(--primary-400,#60a5fa)' : 'var(--gray-300)';
+        lbl.style.fontWeight = cb.checked ? '600' : '';
+      });
+      // Style initial
+      lbl.style.background = cb.checked ? 'var(--primary-50,#eff6ff)' : 'var(--gray-50)';
+      lbl.style.borderColor = cb.checked ? 'var(--primary-400,#60a5fa)' : 'var(--gray-300)';
+      lbl.style.fontWeight = cb.checked ? '600' : '';
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(' ' + sp));
+      zone.appendChild(lbl);
+    });
   },
 
   _majApercuHoraires() {
@@ -119,6 +170,12 @@ const Parametres = {
     const ttDebut = (ttDebutSaisi && ttDebutSaisi !== autoDebut) ? ttDebutSaisi : '';
     const ttFin = (ttFinSaisi && ttFinSaisi !== autoFin) ? ttFinSaisi : '';
 
+    // Type affectation et spécialités sélectionnées
+    const typeAffectation = $('#ep-type-affectation').value || 'commune';
+    const optionsLiees = typeAffectation === 'specialite'
+      ? Array.from($$('#ep-specialites-liste input[type=checkbox]:checked')).map(cb => cb.value)
+      : [];
+
     const f = {
       date: $('#ep-date').value,
       matiere: $('#ep-matiere').value,
@@ -127,8 +184,13 @@ const Parametres = {
       ttDebut: ttDebut,
       ttFin: ttFin,
       notes: $('#ep-notes').value,
+      typeAffectation,
+      optionsLiees,
     };
     if (!f.date || !f.matiere.trim()) { notifier('Date et matière sont obligatoires.', 'error'); return; }
+    if (typeAffectation === 'specialite' && !optionsLiees.length) {
+      notifier('Sélectionnez au moins une spécialité pour ce type d\'épreuve.', 'warning'); return;
+    }
     if (this._editId) AppData.updateEpreuve(this._editId, f);
     else AppData.addEpreuve(f);
     fermerModal('modal-epreuve');
@@ -154,7 +216,7 @@ const Parametres = {
     $('#count-epreuves').textContent = AppData.epreuves.length;
 
     if (!AppData.epreuves.length) {
-      tbody.innerHTML = `<tr><td colspan="7" class="table-empty">
+      tbody.innerHTML = `<tr><td colspan="8" class="table-empty">
         Aucune épreuve. Cliquez sur <strong>+ Ajouter une épreuve</strong> pour bâtir le calendrier
         (une ligne par épreuve : date, matière, horaires). Le tiers temps est calculé automatiquement.</td></tr>`;
       return;
@@ -165,7 +227,13 @@ const Parametres = {
       const nouvelleJournee = ep.date !== jourPrec;
       jourPrec = ep.date;
       const sep = nouvelleJournee
-        ? `<tr class="row-jour"><td colspan="7">📅 ${escHtml(AppData.formatDate(ep.date))}</td></tr>` : '';
+        ? `<tr class="row-jour"><td colspan="8">📅 ${escHtml(AppData.formatDate(ep.date))}</td></tr>` : '';
+      const typeAff = ep.typeAffectation || 'commune';
+      const badgeType = typeAff === 'specialite'
+        ? `<span class="badge" style="background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd">🎓 Spéc.</span>`
+        : `<span class="badge" style="background:#f0fdf4;color:#166534;border:1px solid #86efac">👥 Commune</span>`;
+      const tooltipSpec = typeAff === 'specialite' && ep.optionsLiees && ep.optionsLiees.length
+        ? ` title="${escHtml(ep.optionsLiees.join(', '))}"` : '';
       return sep + `
         <tr>
           <td>${ep.id}</td>
@@ -174,6 +242,8 @@ const Parametres = {
           <td>${AppData.formatDuree(ep.duree)}</td>
           <td>${AppData.heureFin(ep)}</td>
           <td><span class="badge badge-tt">⏱ ${AppData.heureDebutTT(ep)}–${AppData.heureFinTT(ep)}</span></td>
+          <td${tooltipSpec}>${badgeType}${typeAff === 'specialite' && ep.optionsLiees && ep.optionsLiees.length
+            ? `<span style="font-size:.8rem;color:var(--gray-500);margin-left:4px">${escHtml(ep.optionsLiees.join(', '))}</span>` : ''}</td>
           <td class="col-actions">
             <button class="btn btn-icon btn-edit" data-edit="${ep.id}" title="Modifier">✏</button>
             <button class="btn btn-icon btn-del" data-del="${ep.id}" title="Supprimer">🗑</button>

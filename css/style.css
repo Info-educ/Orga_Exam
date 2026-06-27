@@ -2928,10 +2928,10 @@ div.modal-wide { max-width: 780px; }
 .btn-link:hover { opacity: .8; }
 
 /* ══════════════════════════════════════════════════════════════
-   AFFECTATION DES ÉLÈVES EN SALLES
+   AFFECTATION DES ÉLÈVES EN SALLES — v2 (kanban + DnD)
    ══════════════════════════════════════════════════════════════ */
 
-/* --- Options bar --- */
+/* --- Barre d'options --- */
 .aff-options-bar {
   display: flex;
   flex-wrap: wrap;
@@ -2971,30 +2971,59 @@ div.modal-wide { max-width: 780px; }
   background: #f8fafc;
 }
 
-/* --- Stats globales --- */
+/* --- Stats & badges --- */
 .aff-stats {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   font-size: 0.88rem;
   color: var(--blue-800, #1e3a5f);
 }
+.aff-badge-ok   { background:#ecfdf5; color:#065f46; border:1px solid #6ee7b7; border-radius:99px; padding:2px 11px; font-size:.82rem; font-weight:600; }
+.aff-badge-warn { background:#fffbeb; color:#92400e; border:1px solid #fde68a; border-radius:99px; padding:2px 11px; font-size:.82rem; font-weight:600; }
+.aff-badge-err  { background:#fef2f2; color:#991b1b; border:1px solid #fca5a5; border-radius:99px; padding:2px 11px; font-size:.82rem; font-weight:600; }
 
-/* --- Grille des salles preview --- */
-.aff-salles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
-  margin-top: 8px;
+/* --- Alertes globales --- */
+.aff-alertes-global {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
 }
+.aff-alerte {
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.aff-alerte-error   { background:#fef2f2; color:#991b1b; border:1px solid #fca5a5; }
+.aff-alerte-warning { background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
+.aff-alerte-sm      { font-size: 0.80rem; padding: 5px 9px; margin-top: 5px; }
+
+/* --- Kanban --- */
+.aff-kanban {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+/* --- Carte salle --- */
 .aff-salle-card {
   border: 1px solid var(--border, #d8dee9);
   border-radius: 10px;
   padding: 14px;
   background: var(--surface, #fff);
-  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  transition: box-shadow .15s;
 }
+.aff-salle-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,.1); }
+.aff-card-error { border-color: #fca5a5; background: #fff8f8; }
+.aff-card-warn  { border-color: #fde68a; background: #fffdf0; }
+.aff-card-nonaffectes { border-color: #cbd5e1; background: #f8fafc; }
+
 .aff-salle-header {
   display: flex;
   align-items: center;
@@ -3007,6 +3036,10 @@ div.modal-wide { max-width: 780px; }
   font-size: 0.95rem;
   color: var(--blue-900, #0d2240);
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .aff-salle-count {
   font-size: 0.82rem;
@@ -3016,14 +3049,18 @@ div.modal-wide { max-width: 780px; }
   border-radius: 12px;
   padding: 2px 9px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
+.aff-count-error { background:#fef2f2; color:#991b1b; }
+.aff-count-warn  { background:#fffbeb; color:#92400e; }
 .aff-salle-classes {
-  font-size: 0.78rem;
+  width: 100%;
+  font-size: 0.75rem;
   color: #64748b;
   font-style: italic;
 }
 .aff-jauge-wrap {
-  height: 5px;
+  height: 4px;
   background: #e2e8f0;
   border-radius: 99px;
   margin-bottom: 10px;
@@ -3032,28 +3069,96 @@ div.modal-wide { max-width: 780px; }
 .aff-jauge-bar {
   height: 100%;
   border-radius: 99px;
-  transition: width 0.3s;
+  transition: width .3s;
 }
-.aff-eleves-liste {
+.aff-salle-alertes { margin-bottom: 2px; }
+
+/* --- Zone de dépôt --- */
+.aff-drop-zone {
+  min-height: 50px;
+  border: 2px dashed transparent;
+  border-radius: 8px;
+  padding: 6px;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 5px;
-  margin-top: 4px;
-  max-height: 200px;
-  overflow-y: auto;
+  transition: background .12s, border-color .12s;
 }
+.aff-drop-has-error { border-color: #fca5a5; }
+.aff-drop-has-warn  { border-color: #fde68a; }
+.aff-drop-zone.aff-drag-over {
+  background: #ecfdf5;
+  border-color: var(--teal-500, #0d9488);
+  box-shadow: inset 0 0 0 1px var(--teal-500, #0d9488);
+}
+
+/* --- Chips d'élèves --- */
 .aff-eleve-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   background: #f1f5f9;
   border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 0.80rem;
-  padding: 3px 8px;
-  color: #334155;
-}
-.aff-vide {
+  border-radius: 7px;
   font-size: 0.82rem;
+  padding: 5px 7px;
+  color: #334155;
+  transition: background .1s, border-color .1s, box-shadow .1s;
+}
+.aff-eleve-draggable {
+  cursor: grab;
+  user-select: none;
+}
+.aff-eleve-draggable:hover {
+  background: #e8f0fe;
+  border-color: #93c5fd;
+}
+.aff-eleve-draggable.aff-dragging {
+  opacity: .4;
+  cursor: grabbing;
+}
+.aff-chip-grip {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.aff-chip-nom {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aff-chip-classe {
+  font-size: 0.72rem;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+.aff-chip-del {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color .12s;
+}
+.aff-chip-del:hover { color: #ef4444; }
+
+.aff-vide {
+  font-size: 0.80rem;
   color: #94a3b8;
   font-style: italic;
+  padding: 8px 4px;
+  text-align: center;
+  width: 100%;
 }
 
 /* --- Groupes de séparation --- */
@@ -3084,30 +3189,13 @@ div.modal-wide { max-width: 780px; }
   color: var(--blue-900, #0d2240);
   transition: border-color .15s;
 }
-.groupe-sep-nom:hover,
-.groupe-sep-nom:focus {
+.groupe-sep-nom:hover, .groupe-sep-nom:focus {
   border-color: var(--accent, #2563eb);
   background: #fff;
   outline: none;
 }
-.groupe-warn {
-  font-size: 0.80rem;
-  color: #b45309;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  border-radius: 8px;
-  padding: 3px 10px;
-  white-space: nowrap;
-}
-.groupe-ok {
-  font-size: 0.80rem;
-  color: #065f46;
-  background: #ecfdf5;
-  border: 1px solid #6ee7b7;
-  border-radius: 8px;
-  padding: 3px 10px;
-  white-space: nowrap;
-}
+.groupe-warn { font-size:.80rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:3px 10px;white-space:nowrap; }
+.groupe-ok   { font-size:.80rem;color:#065f46;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:3px 10px;white-space:nowrap; }
 .groupe-sep-membres {
   display: flex;
   flex-wrap: wrap;
@@ -3130,50 +3218,17 @@ div.modal-wide { max-width: 780px; }
   font-size: 0.83rem;
   color: #1e3a8a;
 }
-.groupe-chip-nom {
-  font-weight: 600;
-}
-.groupe-chip-classe {
-  font-size: 0.75rem;
-  color: #64748b;
-}
-.groupe-chip-del {
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: #94a3b8;
-  font-size: 0.78rem;
-  padding: 0 2px;
-  line-height: 1;
-  transition: color .12s;
-}
-.groupe-chip-del:hover { color: #ef4444; }
-.groupe-vide {
-  font-size: 0.82rem;
-  color: #94a3b8;
-  font-style: italic;
-  align-self: center;
-}
-.groupe-sep-add {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.groupe-sep-select {
-  flex: 1;
-  padding: 6px 10px;
-  border: 1px solid var(--border, #d8dee9);
-  border-radius: 6px;
-  font-size: 0.88rem;
-  background: #f8fafc;
-}
-.btn-sm {
-  padding: 6px 14px;
-  font-size: 0.85rem;
-}
+.groupe-chip-nom   { font-weight:600; }
+.groupe-chip-classe{ font-size:.75rem;color:#64748b; }
+.groupe-chip-del   { border:none;background:none;cursor:pointer;color:#94a3b8;font-size:.78rem;padding:0 2px;line-height:1;transition:color .12s; }
+.groupe-chip-del:hover { color:#ef4444; }
+.groupe-vide { font-size:.82rem;color:#94a3b8;font-style:italic;align-self:center; }
+.groupe-sep-add { display:flex;gap:8px;align-items:center; }
+.groupe-sep-select { flex:1;padding:6px 10px;border:1px solid var(--border,#d8dee9);border-radius:6px;font-size:.88rem;background:#f8fafc; }
+.btn-sm { padding:6px 14px;font-size:.85rem; }
 
-@media (max-width: 640px) {
-  .aff-options-bar { flex-direction: column; }
-  .aff-salles-grid { grid-template-columns: 1fr; }
-  .groupe-sep-add { flex-direction: column; }
+@media (max-width:640px) {
+  .aff-options-bar { flex-direction:column; }
+  .aff-kanban { grid-template-columns:1fr; }
+  .groupe-sep-add { flex-direction:column; }
 }
