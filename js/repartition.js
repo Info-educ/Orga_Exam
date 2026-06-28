@@ -109,11 +109,12 @@ const Repartition = {
      * sollicités que s'il ne reste aucun enseignant disponible.
      * AED, AESH et administratifs ne sont jamais affectés en salle.
      */
-    const choisir = (ep) => {
+    const choisir = (ep, salleId) => {
       const base = AppData.surveillants.filter(s =>
         s.dispos[ep.id] &&
         AppData.eligibleSalle(s) &&
         !AppData.estMobiliseEpreuve(ep.id, s.id) &&
+        !AppData.aBlocageHoraire(s.id, ep.id, salleId !== undefined ? salleId : null) &&
         (!s.quotaMax || charge[s.id].creneaux < s.quotaMax));
       let candidats = base.filter(s => AppData.estEnseignant(s));
       if (!candidats.length) candidats = base;   // CPE en renfort
@@ -131,7 +132,7 @@ const Repartition = {
         const duree = AppData.dureeCreneau(ep, salle);
         let besoin = salle.nbSurveillants - AppData.getAffectes(ep.id, salle.id).length;
         while (besoin > 0) {
-          const elu = choisir(ep);
+          const elu = choisir(ep, salle.id);
           if (!elu) { manquants += besoin; break; }
           AppData.affecter(ep.id, salle.id, elu.id);
           charge[elu.id].minutes += duree;
@@ -176,7 +177,7 @@ const Repartition = {
       // 3) Réserve TIERS TEMPS : présente jusqu'à la fin du TT, pourvue en premier
       let besoinTT = (AppData.params.nbReservesTT || 0) - AppData.getReserveTT(ep.id).length;
       while (besoinTT > 0) {
-        const elu = choisir(ep);
+        const elu = choisir(ep, null);
         if (!elu) { manquants += besoinTT; break; }
         AppData.mettreEnReserveTT(ep.id, elu.id);
         charge[elu.id].minutes += AppData.dureeTTEpreuve(ep);
@@ -187,7 +188,7 @@ const Repartition = {
       // 4) Réserve : pourvue comme les autres postes
       let besoinRes = (AppData.params.nbReserves || 0) - AppData.getReserve(ep.id).length;
       while (besoinRes > 0) {
-        const elu = choisir(ep);
+        const elu = choisir(ep, null);
         if (!elu) { manquants += besoinRes; break; }
         AppData.mettreEnReserve(ep.id, elu.id);
         charge[elu.id].minutes += ep.duree;
@@ -507,6 +508,9 @@ const Repartition = {
   _selectAjout(ep, cible) {
     const disponibles = AppData.surveillants.filter(s => {
       if (!s.dispos[ep.id]) return false;
+      // Bloquer si chevauchement horaire réel avec un autre créneau déjà affecté
+      const salleId = cible.salle !== undefined ? cible.salle : null;
+      if (AppData.aBlocageHoraire(s.id, ep.id, salleId)) return false;
       if (cible.couloir !== undefined)
         return AppData.eligibleCouloir(s)
           && !AppData.estAffecteEpreuve(ep.id, s.id) && !AppData.estEnReserve(ep.id, s.id)
@@ -747,7 +751,17 @@ const DnD = {
       notifier(`${escHtml(this._nom(src.surv))} n\u2019est pas disponible sur cette épreuve.`, 'error');
       return;
     }
+    // Vérifier le blocage horaire (on retire d'abord temporairement l'affectation source
+    // pour ne pas se compter soi-même dans la détection)
     this._retirer(src);
+    const salleIdDst = dst.salle !== undefined ? dst.salle : null;
+    const blocage = AppData.aBlocageHoraire(src.surv, dst.ep, salleIdDst);
+    if (blocage) {
+      this._placer(src, src.surv);  // restaurer
+      const { details } = AppData.conflitsHoraires(src.surv, dst.ep, salleIdDst);
+      notifier(`❌ Affectation impossible — chevauchement horaire pour ${escHtml(this._nom(src.surv))} :<br>${details.join('<br>')}`, 'error', 7000);
+      return;
+    }
     const conflit = dst.couloir !== undefined
       ? (AppData.estAffecteEpreuve(dst.ep, src.surv) || AppData.estEnReserve(dst.ep, src.surv)
          || AppData.estEnReserveTT(dst.ep, src.surv) || AppData.creneauCouloirOccupe(dst.ep, dst.slot, src.surv))
@@ -771,6 +785,22 @@ const DnD = {
 
     this._retirer(a);
     this._retirer(b);
+
+    // Vérifier les blocages horaires croisés
+    const salleIdB = b.salle !== undefined ? b.salle : null;
+    const salleIdA = a.salle !== undefined ? a.salle : null;
+    const blocageA = AppData.aBlocageHoraire(a.surv, b.ep, salleIdB);
+    const blocageB = AppData.aBlocageHoraire(b.surv, a.ep, salleIdA);
+    if (blocageA || blocageB) {
+      this._placer(a, a.surv); this._placer(b, b.surv);  // restaurer
+      const qui = blocageA ? a.surv : b.surv;
+      const epCible = blocageA ? b.ep : a.ep;
+      const salleCible = blocageA ? salleIdB : salleIdA;
+      const { details } = AppData.conflitsHoraires(qui, epCible, salleCible);
+      notifier(`❌ Échange impossible — chevauchement horaire pour ${escHtml(this._nom(qui))} :<br>${details.join('<br>')}`, 'error', 7000);
+      return;
+    }
+
     const conflitA = AppData.estMobiliseEpreuve(b.ep, a.surv);
     const conflitB = AppData.estMobiliseEpreuve(a.ep, b.surv);
     if (conflitA || conflitB) {

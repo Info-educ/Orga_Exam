@@ -288,6 +288,11 @@ const Recap = {
       <th class="text-center">Heures</th><th class="text-center">dont secrétariat</th><th>Charge</th><th>Détail des affectations</th></tr></thead><tbody>`;
 
     lignes.forEach(({ sv, creneaux, minutes }) => {
+      // Détection des conflits horaires (blocage + alerte présence 20 min)
+      const conflits = AppData.conflitsHoraires(sv.id);
+      const hasBlocage = conflits.blocage;
+      const hasAlerte = conflits.alerte;
+
       const detail = creneaux.map(c =>
         c.couloir
           ? `${escHtml(AppData.formatDateCourt(c.ep.date))} ${escHtml(c.ep.matiere)} — <span class="badge badge-secr">🚶 ${escHtml(c.couloir.couloir.nom)} ${c.couloir.debut}–${c.couloir.fin}</span> (${AppData.formatDuree(c.duree)})`
@@ -301,9 +306,24 @@ const Recap = {
       const pct = Math.round(minutes / maxMin * 100);
       const ecart = moyenne ? minutes - moyenne : 0;
       const ecartTxt = creneaux.length && moyenne
-        ? ` <span class="dispo-count">(${ecart >= 0 ? '+' : '−'}${AppData.formatDuree(Math.abs(ecart))} vs moy.)</span>` : '';
+        ? ` <span class="dispo-count">(${ecart >= 0 ? '+' : '\u2212'}${AppData.formatDuree(Math.abs(ecart))} vs moy.)</span>` : '';
 
-      html += `<tr ${creneaux.length ? '' : 'style="opacity:.55"'}>
+      // Badge affiché dans la colonne détail si conflit détecté
+      const titreConflits = escHtml(conflits.details.join(' | '));
+      const badgeConflits = hasBlocage
+        ? `<br><span class="badge" style="background:#d32f2f;color:#fff;margin-top:4px" title="${titreConflits}">❌ Chevauchement horaire</span>`
+        : hasAlerte
+        ? `<br><span class="badge" style="background:#f57c00;color:#fff;margin-top:4px" title="${titreConflits}">⚠️ Présence 20 min avant difficile</span>`
+        : '';
+
+      // Mise en évidence de la ligne si conflit
+      const rowStyle = hasBlocage
+        ? 'style="background:rgba(211,47,47,.08)"'
+        : hasAlerte
+        ? 'style="background:rgba(245,124,0,.07)"'
+        : (creneaux.length ? '' : 'style="opacity:.55"');
+
+      html += `<tr ${rowStyle}>
         <td><strong>${escHtml(sv.nom)}</strong> ${escHtml(sv.prenom)}</td>
         <td>${escHtml(sv.fonction || '')}${sv.heuresHebdo ? ` <span class="dispo-count">${sv.heuresHebdo} h/sem</span>` : ''}</td>
         <td class="text-center">${creneaux.length}${sv.quotaMax ? ` / ${sv.quotaMax}` : ''}</td>
@@ -313,7 +333,7 @@ const Recap = {
           return mSecr ? `<span class="badge badge-secr">${AppData.formatDuree(mSecr)}</span>` : '—';
         })()}</td>
         <td><div class="equite-bar-wrap" style="min-width:90px"><div class="equite-bar" style="width:${pct}%"></div></div></td>
-        <td style="font-size:.82rem">${detail}</td>
+        <td style="font-size:.82rem">${detail}${badgeConflits}</td>
       </tr>`;
     });
 

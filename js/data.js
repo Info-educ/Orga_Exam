@@ -1002,6 +1002,122 @@ const AppData = {
     return ep.duree;
   },
 
+  /**
+   * Détecte les conflits horaires d'un surveillant SI on lui affectait l'épreuve epIdTest
+   * dans la salle salleIdTest (null = réserve).
+   *
+   * Retourne un objet { blocage: bool, alerte: bool, details: string }
+   *   blocage : chevauchement réel (fin créneau N > début créneau N+1) → bloquer l'affectation
+   *   alerte  : transition trop courte (fin + 20 min > début suivant) → avertir seulement
+   *   details : message lisible pour l'utilisateur
+   *
+   * Si epIdTest/salleIdTest sont omis, analyse les conflits existants seulement.
+   */
+  conflitsHoraires(survId, epIdTest, salleIdTest) {
+    const DELAI_PRESENCE = (typeof PrintConfig !== 'undefined' ? PrintConfig.get().minutesAvant : 15) || 15;
+
+    // Construire la liste de tous les créneaux du surveillant
+    const creneaux = [];
+
+    this.epreuves.forEach(ep => {
+      // Si on teste une affectation hypothétique sur cette épreuve, on l'exclut
+      // des créneaux existants pour éviter le double-comptage (le créneau
+      // hypothétique sera ajouté ensuite avec la bonne salle cible).
+      if (epIdTest !== undefined && epIdTest !== null && ep.id === epIdTest) return;
+
+      // Salles affectées
+      const parEp = this.affectations[ep.id] || {};
+      Object.keys(parEp).forEach(sid => {
+        if (!parEp[sid].includes(survId)) return;
+        const salle = this.getSalle(parseInt(sid, 10));
+        creneaux.push({
+          date:   ep.date,
+          debut:  this.heureDebutSalle(ep, salle),
+          fin:    this.heureFinSalle(ep, salle),
+          label:  `${ep.matiere} (salle ${salle ? salle.nom : '?'})`,
+        });
+      });
+      // Réserve normale (durée épreuve)
+      if (this.estEnReserve(ep.id, survId)) {
+        creneaux.push({
+          date:  ep.date,
+          debut: ep.heureDebut,
+          fin:   this.heureFin(ep),
+          label: `${ep.matiere} (réserve)`,
+        });
+      }
+      // Réserve tiers-temps
+      if (this.estEnReserveTT(ep.id, survId)) {
+        creneaux.push({
+          date:  ep.date,
+          debut: this.heureDebutTT(ep),
+          fin:   this.heureFinTT(ep),
+          label: `${ep.matiere} (réserve TT)`,
+        });
+      }
+      // Couloirs
+      this.creneauxCouloirDe(ep, survId).forEach(c => {
+        creneaux.push({
+          date:  ep.date,
+          debut: c.debut,
+          fin:   c.fin,
+          label: `${ep.matiere} (couloir)`,
+        });
+      });
+    });
+
+    // Ajouter le créneau hypothétique si fourni
+    if (epIdTest !== undefined && epIdTest !== null) {
+      const epTest = this.epreuves.find(e => e.id === epIdTest);
+      if (epTest) {
+        const salleTest = salleIdTest != null ? this.getSalle(salleIdTest) : null;
+        creneaux.push({
+          date:    epTest.date,
+          debut:   this.heureDebutSalle(epTest, salleTest),
+          fin:     this.heureFinSalle(epTest, salleTest),
+          label:   `${epTest.matiere} (nouveau)`,
+          nouveau: true,
+        });
+      }
+    }
+
+    // Trier par date puis heure de début
+    creneaux.sort((a, b) =>
+      (a.date + a.debut).localeCompare(b.date + b.debut));
+
+    // Analyser les paires consécutives sur le même jour
+    let blocage = false, alerte = false;
+    const details = [];
+
+    for (let i = 0; i < creneaux.length - 1; i++) {
+      const c = creneaux[i], n = creneaux[i + 1];
+      if (c.date !== n.date) continue;  // jours différents : pas de conflit
+
+      if (c.fin > n.debut) {
+        // Chevauchement réel → BLOCAGE
+        blocage = true;
+        details.push(`Chevauchement : « ${c.label} » finit à ${c.fin} mais « ${n.label} » commence à ${n.debut}`);
+      } else {
+        const finAvecDelai = this.addMinutes(c.fin, DELAI_PRESENCE);
+        if (finAvecDelai > n.debut) {
+          // Transition trop courte pour être présent 20 min avant → ALERTE
+          alerte = true;
+          details.push(`Transition courte : « ${c.label} » finit à ${c.fin}, présence requise pour « ${n.label} » à ${this.addMinutes(n.debut, -DELAI_PRESENCE)}`);
+        }
+      }
+    }
+
+    return { blocage, alerte, details };
+  },
+
+  /**
+   * Version simplifiée : conflit de blocage seulement, pour les filtres de sélection.
+   * Retourne true si affecter survId à epIdTest/salleIdTest créerait un chevauchement.
+   */
+  aBlocageHoraire(survId, epIdTest, salleIdTest) {
+    return this.conflitsHoraires(survId, epIdTest, salleIdTest).blocage;
+  },
+
   /** Charge cumulée d'un surveillant : { creneaux, minutes } — réserve incluse */
   chargeSurveillant(survId) {
     let creneaux = 0, minutes = 0;
