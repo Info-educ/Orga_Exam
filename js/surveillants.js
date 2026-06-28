@@ -90,10 +90,13 @@ const Surveillants = {
     const jours = AppData.jours();
     const epParJour = jours.map(j => ({ jour: j, eps: AppData.epreuves.filter(e => e.date === j) }));
 
-    let html = `<div class="table-wrapper dispo-wrapper"><table class="data-table dispo-table" style="min-width:${185 + AppData.epreuves.length * 76}px">
+    let html = `<div class="table-wrapper dispo-wrapper"><table class="data-table dispo-table" style="min-width:${220 + AppData.epreuves.length * 76}px">
       <thead>
         <tr>
-          <th rowspan="2" class="dispo-col-nom">Surveillant</th>
+          <th rowspan="2" class="dispo-col-nom">
+            Surveillant
+            <button class="dispo-toggle-all" id="btn-dispo-all" title="Tout cocher / décocher (tous surveillants, toutes épreuves)">⇅⇄ Tout</button>
+          </th>
           ${epParJour.map(g => `<th colspan="${g.eps.length}" class="dispo-col-jour">${escHtml(AppData.formatDateCourt(g.jour))}</th>`).join('')}
           <th rowspan="2" class="text-center">Dispo</th>
           <th rowspan="2" class="col-actions">Actions</th>
@@ -111,10 +114,11 @@ const Surveillants = {
 
     liste.forEach(s => {
       const nbDispos = AppData.epreuves.filter(ep => s.dispos[ep.id]).length;
+      const extras = [s.heuresHebdo ? `${s.heuresHebdo} h/sem` : '', s.quotaMax ? `max ${s.quotaMax} cr.` : ''].filter(Boolean).join(' · ');
       html += `<tr>
         <td class="dispo-col-nom">
-          <strong>${escHtml(s.nom)}</strong> ${escHtml(s.prenom)}
-          <small>${escHtml(s.fonction)}${s.heuresHebdo ? ` · ${s.heuresHebdo} h/sem` : ''}${s.quotaMax ? ` · max ${s.quotaMax} cr.` : ''}</small>
+          <span class="dispo-nom-ligne">${escHtml(s.nom)} ${escHtml(s.prenom)}</span>
+          <span class="dispo-fn-ligne">${escHtml(s.fonction)}</span>${extras ? `<span class="dispo-extras">${escHtml(extras)}</span>` : ''}
           <button class="dispo-toggle-row" data-row="${s.id}" title="Tout cocher / décocher pour ce surveillant">⇄</button>
         </td>
         ${AppData.epreuves.map(ep => `
@@ -165,6 +169,19 @@ const Surveillants = {
       b.addEventListener('click', () => this.ouvrir(parseInt(b.dataset.edit, 10))));
     $$('#zone-dispos [data-del]').forEach(b =>
       b.addEventListener('click', () => this.supprimer(parseInt(b.dataset.del, 10))));
+
+    // Bouton tout-global : coche/décoche tous les surveillants sur toutes les épreuves
+    const btnAll = $('#btn-dispo-all');
+    if (btnAll) {
+      btnAll.addEventListener('click', () => {
+        const toutCoche = AppData.surveillants.every(s =>
+          AppData.epreuves.every(ep => s.dispos[ep.id]));
+        AppData.surveillants.forEach(s =>
+          AppData.epreuves.forEach(ep => AppData.setDispo(s.id, ep.id, !toutCoche)));
+        Unsaved.marquer();
+        this.rendre();
+      });
+    }
   },
 
   _majBadgeLigne(survId) {
